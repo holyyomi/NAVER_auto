@@ -3,7 +3,8 @@ export type ActiveFeatureKey =
   | "search-results-hub"
   | "shopping-insights"
   | "local-business-research"
-  | "search-ad-report-assist";
+  | "search-ad-report-assist"
+  | "ad-operations-assist";
 
 export type HistoryField = {
   label: string;

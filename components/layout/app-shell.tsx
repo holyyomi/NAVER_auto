@@ -3,7 +3,15 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { allFeatures, activeFeatures, upcomingFeatures } from "@/lib/features";
+import {
+  allFeatures,
+  type FeatureDefinition,
+  getFeatureByHref,
+  getFeatureStatusMeta,
+  pendingFeatures,
+  plannedFeatures,
+  usableFeatures,
+} from "@/lib/features";
 
 type AppShellProps = {
   children: React.ReactNode;
@@ -13,7 +21,7 @@ export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const appName = process.env.NEXT_PUBLIC_APP_NAME || "네이버 마케팅 운영 센터";
   const isHome = pathname === "/";
-  const currentFeature = allFeatures.find((feature) => feature.href === pathname);
+  const currentFeature = getFeatureByHref(pathname);
 
   return (
     <div className="min-h-screen">
@@ -25,28 +33,15 @@ export function AppShell({ children }: AppShellProps) {
               {appName}
             </h1>
             <p className="mt-2 text-sm leading-6 text-[var(--text-body)]">
-              필요한 작업을 바로 엽니다.
+              현재 운영 가능한 기능과 승인 대기 기능을 한 화면에서 정리합니다.
             </p>
           </div>
 
           <div className="border-b border-[var(--line)] px-4 py-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-xl border border-[var(--line)] bg-[var(--bg-elevated)] px-4 py-3">
-                <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--text-dim)]">
-                  활성
-                </p>
-                <p className="metric-value mt-2 text-xl font-semibold text-[var(--text-strong)]">
-                  {activeFeatures.length}
-                </p>
-              </div>
-              <div className="rounded-xl border border-[var(--line)] bg-[var(--bg-elevated)] px-4 py-3">
-                <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--text-dim)]">
-                  예정
-                </p>
-                <p className="metric-value mt-2 text-xl font-semibold text-[var(--text-strong)]">
-                  {upcomingFeatures.length}
-                </p>
-              </div>
+            <div className="grid grid-cols-3 gap-3">
+              <StatusCountCard label="사용 가능" value={usableFeatures.length} />
+              <StatusCountCard label="승인 대기" value={pendingFeatures.length} />
+              <StatusCountCard label="준비 중" value={plannedFeatures.length} />
             </div>
           </div>
 
@@ -55,58 +50,32 @@ export function AppShell({ children }: AppShellProps) {
               <p className="section-label px-2">홈</p>
               <Link href="/" className={navItemClass(pathname === "/")}>
                 <div>
-                  <p className="text-sm font-medium text-[var(--text-strong)]">작업 선택</p>
-                  <p className="mt-1 text-xs text-[var(--text-dim)]">바로 시작</p>
+                  <p className="text-sm font-medium text-[var(--text-strong)]">작업 대시보드</p>
+                  <p className="mt-1 text-xs text-[var(--text-dim)]">
+                    상태별 기능 구성을 바로 확인합니다.
+                  </p>
                 </div>
                 <span className="text-xs font-medium text-[var(--text-dim)]">00</span>
               </Link>
             </div>
 
-            <div className="mt-7">
-              <p className="section-label px-2">활성</p>
-              <div className="mt-2 space-y-1.5">
-                {activeFeatures.map((feature) => (
-                  <Link
-                    key={feature.slug}
-                    href={feature.href}
-                    className={navItemClass(pathname === feature.href)}
-                  >
-                    <div>
-                      <p className="text-sm font-medium text-[var(--text-strong)]">
-                        {feature.title}
-                      </p>
-                      <p className="mt-1 text-xs leading-5 text-[var(--text-dim)]">
-                        {feature.shortDescription}
-                      </p>
-                    </div>
-                    <StatusBadge tone="active">사용</StatusBadge>
-                  </Link>
-                ))}
-              </div>
-            </div>
-
-            <div className="mt-7">
-              <p className="section-label px-2">예정</p>
-              <div className="mt-2 space-y-1.5">
-                {upcomingFeatures.map((feature) => (
-                  <Link
-                    key={feature.slug}
-                    href={feature.href}
-                    className={navItemClass(pathname === feature.href, true)}
-                  >
-                    <div>
-                      <p className="text-sm font-medium text-[var(--text-strong)]">
-                        {feature.title}
-                      </p>
-                      <p className="mt-1 text-xs leading-5 text-[var(--text-dim)]">
-                        {feature.shortDescription}
-                      </p>
-                    </div>
-                    <StatusBadge tone="pending">준비 중</StatusBadge>
-                  </Link>
-                ))}
-              </div>
-            </div>
+            <FeatureNavSection
+              title="사용 가능"
+              features={usableFeatures}
+              currentPath={pathname}
+            />
+            <FeatureNavSection
+              title="승인 대기"
+              features={pendingFeatures}
+              currentPath={pathname}
+              subdued
+            />
+            <FeatureNavSection
+              title="준비 중"
+              features={plannedFeatures}
+              currentPath={pathname}
+              subdued
+            />
           </nav>
         </aside>
 
@@ -116,20 +85,30 @@ export function AppShell({ children }: AppShellProps) {
               <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
                 <div>
                   <p className="section-label">기능</p>
-                  <p className="mt-2 text-[24px] font-semibold tracking-[-0.035em] text-[var(--text-strong)]">
-                    {currentFeature?.title ?? "기능"}
-                  </p>
+                  <div className="mt-2 flex flex-wrap items-center gap-3">
+                    <p className="text-[24px] font-semibold tracking-[-0.035em] text-[var(--text-strong)]">
+                      {currentFeature?.title ?? "기능"}
+                    </p>
+                    {currentFeature ? (
+                      <StatusBadge tone={getFeatureStatusMeta(currentFeature.status).tone}>
+                        {getFeatureStatusMeta(currentFeature.status).label}
+                      </StatusBadge>
+                    ) : null}
+                  </div>
                   <p className="mt-3 max-w-3xl text-sm leading-6 text-[var(--text-body)]">
-                    이 화면에서 바로 작업합니다.
+                    {currentFeature?.description ?? "현재 선택한 작업 화면입니다."}
                   </p>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="rounded-xl border border-[var(--line)] bg-[var(--bg-elevated)] px-3.5 py-2.5 text-sm text-[var(--text-body)]">
-                    활성 {activeFeatures.length}개
+                    사용 가능 {usableFeatures.length}개
                   </div>
                   <div className="rounded-xl border border-[var(--line)] bg-[var(--bg-elevated)] px-3.5 py-2.5 text-sm text-[var(--text-body)]">
-                    예정 {upcomingFeatures.length}개
+                    승인 대기 {pendingFeatures.length}개
+                  </div>
+                  <div className="rounded-xl border border-[var(--line)] bg-[var(--bg-elevated)] px-3.5 py-2.5 text-sm text-[var(--text-body)]">
+                    준비 중 {plannedFeatures.length}개
                   </div>
                 </div>
               </div>
@@ -172,6 +151,63 @@ export function AppShell({ children }: AppShellProps) {
 
           <main className={isHome ? "pt-4" : "pt-7"}>{children}</main>
         </div>
+      </div>
+    </div>
+  );
+}
+
+type StatusCountCardProps = {
+  label: string;
+  value: number;
+};
+
+function StatusCountCard({ label, value }: StatusCountCardProps) {
+  return (
+    <div className="rounded-xl border border-[var(--line)] bg-[var(--bg-elevated)] px-3 py-3">
+      <p className="text-[11px] font-medium tracking-[0.14em] text-[var(--text-dim)]">{label}</p>
+      <p className="metric-value mt-2 text-lg font-semibold text-[var(--text-strong)]">{value}</p>
+    </div>
+  );
+}
+
+type FeatureNavSectionProps = {
+  title: string;
+  features: FeatureDefinition[];
+  currentPath: string;
+  subdued?: boolean;
+};
+
+function FeatureNavSection({
+  title,
+  features,
+  currentPath,
+  subdued = false,
+}: FeatureNavSectionProps) {
+  if (features.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-7">
+      <p className="section-label px-2">{title}</p>
+      <div className="mt-2 space-y-1.5">
+        {features.map((feature) => (
+          <Link
+            key={feature.slug}
+            href={feature.href}
+            className={navItemClass(currentPath === feature.href, subdued)}
+          >
+            <div>
+              <p className="text-sm font-medium text-[var(--text-strong)]">{feature.title}</p>
+              <p className="mt-1 text-xs leading-5 text-[var(--text-dim)]">
+                {feature.shortDescription}
+              </p>
+            </div>
+            <StatusBadge tone={getFeatureStatusMeta(feature.status).tone}>
+              {getFeatureStatusMeta(feature.status).shortLabel}
+            </StatusBadge>
+          </Link>
+        ))}
       </div>
     </div>
   );

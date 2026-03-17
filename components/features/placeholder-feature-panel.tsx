@@ -1,31 +1,37 @@
 import Link from "next/link";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { StatusBadge } from "@/components/ui/status-badge";
-import type { FeatureDefinition } from "@/lib/features";
+import { getFeatureStatusMeta, type FeatureDefinition } from "@/lib/features";
 
 type PlaceholderFeaturePanelProps = {
   feature: FeatureDefinition;
 };
 
 export function PlaceholderFeaturePanel({ feature }: PlaceholderFeaturePanelProps) {
+  const statusMeta = getFeatureStatusMeta(feature.status);
+
   return (
     <div className="space-y-6">
       <section className="panel rounded-2xl px-6 py-6">
         <SectionHeading
-          eyebrow="준비 중"
+          eyebrow={statusMeta.sectionLabel}
           title={feature.title}
-          description="아직 사용할 수 없습니다."
-          aside={<StatusBadge tone="pending">준비 중</StatusBadge>}
+          description="아직 실제 작업에 사용할 수 없는 준비 단계 기능입니다."
+          aside={<StatusBadge tone={statusMeta.tone}>{statusMeta.label}</StatusBadge>}
         />
 
         <div className="mt-6 flex flex-wrap items-center gap-3">
           <div className="rounded-xl border border-[var(--line)] bg-[var(--bg-elevated)] px-4 py-3">
             <p className="text-xs text-[var(--text-dim)]">상태</p>
-            <p className="mt-1 text-sm font-medium text-[var(--text-strong)]">출시 전</p>
+            <p className="mt-1 text-sm font-medium text-[var(--text-strong)]">
+              {statusMeta.label}
+            </p>
           </div>
           <div className="rounded-xl border border-[var(--line)] bg-[var(--bg-elevated)] px-4 py-3">
             <p className="text-xs text-[var(--text-dim)]">분류</p>
-            <p className="mt-1 text-sm font-medium text-[var(--text-strong)]">{feature.group}</p>
+            <p className="mt-1 text-sm font-medium text-[var(--text-strong)]">
+              {feature.group}
+            </p>
           </div>
         </div>
       </section>
@@ -33,8 +39,12 @@ export function PlaceholderFeaturePanel({ feature }: PlaceholderFeaturePanelProp
       <section className="panel rounded-2xl px-6 py-6">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <p className="text-sm font-medium text-[var(--text-strong)]">준비 중인 기능입니다.</p>
-            <p className="mt-2 text-sm text-[var(--text-body)]">홈으로 돌아가 다른 작업을 선택하세요.</p>
+            <p className="text-sm font-medium text-[var(--text-strong)]">
+              준비 중인 기능입니다.
+            </p>
+            <p className="mt-2 text-sm text-[var(--text-body)]">
+              홈으로 돌아가 다른 작업을 먼저 진행해 주세요.
+            </p>
           </div>
           <Link
             href="/"

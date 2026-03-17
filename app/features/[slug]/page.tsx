@@ -1,3 +1,4 @@
+import { AdOperationsAssistPanel } from "@/components/features/ad-operations-assist-panel";
 import { notFound } from "next/navigation";
 import { CompetitorKeywordMonitoringPanel } from "@/components/features/competitor-keyword-monitoring-panel";
 import { KeywordTrendPanel } from "@/components/features/keyword-trend-panel";
@@ -14,6 +15,16 @@ type FeaturePageProps = {
   }>;
 };
 
+const featurePanels = {
+  "keyword-trends": KeywordTrendPanel,
+  "search-results-hub": SearchResultsPanel,
+  "shopping-insights": ShoppingInsightsPanel,
+  "local-business-research": LocalBusinessResearchPanel,
+  "competitor-keyword-monitoring": CompetitorKeywordMonitoringPanel,
+  "search-ad-report-assist": SearchAdReportAssistPanel,
+  "ad-operations-assist": AdOperationsAssistPanel,
+} as const;
+
 export function generateStaticParams() {
   return allFeatures.map((feature) => ({ slug: feature.slug }));
 }
@@ -26,28 +37,10 @@ export default async function FeaturePage({ params }: FeaturePageProps) {
     notFound();
   }
 
-  if (slug === "keyword-trends") {
-    return <KeywordTrendPanel />;
-  }
+  const Panel = featurePanels[slug as keyof typeof featurePanels];
 
-  if (slug === "search-results-hub") {
-    return <SearchResultsPanel />;
-  }
-
-  if (slug === "shopping-insights") {
-    return <ShoppingInsightsPanel />;
-  }
-
-  if (slug === "local-business-research") {
-    return <LocalBusinessResearchPanel />;
-  }
-
-  if (slug === "competitor-keyword-monitoring") {
-    return <CompetitorKeywordMonitoringPanel />;
-  }
-
-  if (slug === "search-ad-report-assist") {
-    return <SearchAdReportAssistPanel />;
+  if (Panel) {
+    return <Panel />;
   }
 
   return <PlaceholderFeaturePanel feature={feature} />;
