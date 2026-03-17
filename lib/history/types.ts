@@ -1,7 +1,9 @@
 export type ActiveFeatureKey =
   | "keyword-trends"
   | "search-results-hub"
-  | "shopping-insights";
+  | "shopping-insights"
+  | "local-business-research"
+  | "search-ad-report-assist";
 
 export type HistoryField = {
   label: string;

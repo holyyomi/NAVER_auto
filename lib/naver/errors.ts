@@ -88,10 +88,27 @@ function sanitizeDetail(detail?: string) {
   return detail.replace(/\s+/g, " ").trim().slice(0, 200);
 }
 
-export function toApiErrorResult<T>(
-  _featureLabel: string,
-  error: unknown,
-): ApiResult<T> {
+function isQuotaExceeded(detail?: string) {
+  const normalized = detail?.toLowerCase().replace(/\s+/g, " ").trim();
+
+  if (!normalized) {
+    return false;
+  }
+
+  return [
+    "quota",
+    "quota exceeded",
+    "daily quota",
+    "daily request count exceeded",
+    "usage limit exceeded",
+    "rate limit exceeded",
+    "호출 한도",
+    "일일 한도",
+    "사용 한도",
+  ].some((pattern) => normalized.includes(pattern));
+}
+
+export function toApiErrorResult<T>(_featureLabel: string, error: unknown): ApiResult<T> {
   if (error instanceof ServerConfigError) {
     return {
       ok: false,
@@ -117,6 +134,14 @@ export function toApiErrorResult<T>(
   }
 
   if (error instanceof NaverUpstreamError) {
+    if (error.status === 429 || isQuotaExceeded(error.responseText)) {
+      return {
+        ok: false,
+        code: error.code,
+        error: "오늘 사용 가능한 호출 한도를 초과했습니다. 내일 다시 시도해 주세요.",
+      };
+    }
+
     if (error.status === 401) {
       return {
         ok: false,
@@ -130,14 +155,6 @@ export function toApiErrorResult<T>(
         ok: false,
         code: error.code,
         error: "현재 기능 권한이 아직 승인되지 않았습니다.",
-      };
-    }
-
-    if (error.status === 429) {
-      return {
-        ok: false,
-        code: error.code,
-        error: "잠시 후 다시 시도해 주세요.",
       };
     }
 

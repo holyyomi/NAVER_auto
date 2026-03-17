@@ -1,6 +1,9 @@
 import { notFound } from "next/navigation";
+import { CompetitorKeywordMonitoringPanel } from "@/components/features/competitor-keyword-monitoring-panel";
 import { KeywordTrendPanel } from "@/components/features/keyword-trend-panel";
+import { LocalBusinessResearchPanel } from "@/components/features/local-business-research-panel";
 import { PlaceholderFeaturePanel } from "@/components/features/placeholder-feature-panel";
+import { SearchAdReportAssistPanel } from "@/components/features/search-ad-report-assist-panel";
 import { SearchResultsPanel } from "@/components/features/search-results-panel";
 import { ShoppingInsightsPanel } from "@/components/features/shopping-insights-panel";
 import { allFeatures, getFeatureBySlug } from "@/lib/features";
@@ -33,6 +36,18 @@ export default async function FeaturePage({ params }: FeaturePageProps) {
 
   if (slug === "shopping-insights") {
     return <ShoppingInsightsPanel />;
+  }
+
+  if (slug === "local-business-research") {
+    return <LocalBusinessResearchPanel />;
+  }
+
+  if (slug === "competitor-keyword-monitoring") {
+    return <CompetitorKeywordMonitoringPanel />;
+  }
+
+  if (slug === "search-ad-report-assist") {
+    return <SearchAdReportAssistPanel />;
   }
 
   return <PlaceholderFeaturePanel feature={feature} />;
