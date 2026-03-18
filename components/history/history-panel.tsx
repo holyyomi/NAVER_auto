@@ -2,7 +2,11 @@
 
 import Link from "next/link";
 import { StatusBadge } from "@/components/ui/status-badge";
-import type { SavedActivityRecord } from "@/lib/history/types";
+import {
+  buildSavedItemHref,
+  getSavedFeatureMeta,
+  type SavedItemRecord,
+} from "@/lib/history/types";
 
 function formatSavedAt(value: string) {
   return new Intl.DateTimeFormat("ko-KR", {
@@ -18,10 +22,10 @@ function formatSavedAt(value: string) {
 type HistoryPanelProps = {
   title: string;
   description: string;
-  records: SavedActivityRecord[];
+  records: SavedItemRecord[];
   emptyTitle: string;
   emptyDescription: string;
-  onApply?: (record: SavedActivityRecord) => void;
+  onApply?: (record: SavedItemRecord) => void;
   onRemove?: (id: string) => void;
 };
 
@@ -60,19 +64,21 @@ export function HistoryPanel({
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="text-sm font-medium text-[var(--text-strong)]">{record.title}</p>
-                      <StatusBadge tone="neutral">{record.featureLabel}</StatusBadge>
+                      <StatusBadge tone="neutral">
+                        {getSavedFeatureMeta(record.featureType).label}
+                      </StatusBadge>
                     </div>
-                    <p className="mt-1 text-xs text-[var(--text-dim)]">{formatSavedAt(record.createdAt)}</p>
+                    <p className="mt-1 text-xs text-[var(--text-dim)]">{formatSavedAt(record.updatedAt)}</p>
                   </div>
                   <Link
-                    href={record.route}
+                    href={buildSavedItemHref(record)}
                     className="text-xs font-medium text-[var(--text-muted)] transition hover:text-[var(--text-strong)]"
                   >
-                    이동
+                    열기
                   </Link>
                 </div>
 
-                <p className="mt-3 text-sm leading-6 text-[var(--text-body)]">{record.description}</p>
+                <p className="mt-3 text-sm leading-6 text-[var(--text-body)]">{record.summary}</p>
 
                 <div className="mt-3 flex flex-wrap gap-2">
                   {record.fields.map((field) => (
@@ -101,7 +107,7 @@ export function HistoryPanel({
                       onClick={() => onRemove(record.id)}
                       className="inline-flex h-8 items-center justify-center rounded-lg border border-[var(--line)] bg-transparent px-3 text-xs font-medium text-[var(--text-body)] transition hover:border-[var(--line-strong)]"
                     >
-                      지우기
+                      삭제
                     </button>
                   ) : null}
                 </div>

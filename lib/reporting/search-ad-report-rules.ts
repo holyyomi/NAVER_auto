@@ -107,47 +107,29 @@ function formatComparison(
 }
 
 function classifyHigherBetter(value: number | null, strong: number, ok: number) {
-  if (value === null) {
-    return "neutral" as const;
-  }
-
-  if (value >= strong) {
-    return "positive" as const;
-  }
-
-  if (value >= ok) {
-    return "neutral" as const;
-  }
-
+  if (value === null) return "neutral" as const;
+  if (value >= strong) return "positive" as const;
+  if (value >= ok) return "neutral" as const;
   return "warning" as const;
 }
 
 function classifyLowerBetter(value: number | null, strong: number, ok: number) {
-  if (value === null) {
-    return "neutral" as const;
-  }
-
-  if (value <= strong) {
-    return "positive" as const;
-  }
-
-  if (value <= ok) {
-    return "neutral" as const;
-  }
-
+  if (value === null) return "neutral" as const;
+  if (value <= strong) return "positive" as const;
+  if (value <= ok) return "neutral" as const;
   return "warning" as const;
 }
 
 function getMetricComment(label: string, tone: RuleTone) {
   if (tone === "positive") {
-    return `${label}은(는) 현재 기준에서 긍정적으로 해석할 수 있습니다.`;
+    return `${label} 기준으로는 현재 효율이 안정적으로 유지되고 있습니다.`;
   }
 
   if (tone === "warning") {
-    return `${label}은(는) 우선 점검이 필요한 수준입니다.`;
+    return `${label} 기준으로는 즉시 점검이 필요한 구간입니다.`;
   }
 
-  return `${label}은(는) 안정권이지만 추가 개선 여지는 있습니다.`;
+  return `${label} 기준으로는 보통 수준이며 추가 개선 여지가 있습니다.`;
 }
 
 function pushUnique(target: string[], value: string) {
@@ -164,6 +146,7 @@ export function buildSearchAdReport(input: SearchAdReportInput): SearchAdReportO
     input.clicks !== null
       ? (input.clicks / input.impressions) * 100
       : null);
+
   const derivedCvr =
     input.cvr ??
     (input.clicks !== null &&
@@ -171,6 +154,7 @@ export function buildSearchAdReport(input: SearchAdReportInput): SearchAdReportO
     input.conversions !== null
       ? (input.conversions / input.clicks) * 100
       : null);
+
   const derivedSpend =
     input.conversions !== null && input.cpa !== null ? input.conversions * input.cpa : null;
   const derivedRevenue =
@@ -236,19 +220,26 @@ export function buildSearchAdReport(input: SearchAdReportInput): SearchAdReportO
 
   const positiveCount = metrics.filter((metric) => metric.tone === "positive").length;
   const warningCount = metrics.filter((metric) => metric.tone === "warning").length;
+  const comparisonCount = Object.values(comparisons).filter(Boolean).length;
 
   let tone: RuleTone = "neutral";
-  let headline = "주요 지표는 대체로 안정권입니다.";
-  let summary = "성과 유지와 세부 효율 개선을 함께 검토할 수 있는 상태입니다.";
+  let headline = "핵심 지표는 전반적으로 보통 수준이며 추가 개선 포인트가 남아 있습니다.";
+  let summary = "소재 반응과 전환 효율을 함께 보면서 안정적인 성과 구간을 넓히는 접근이 적절합니다.";
 
   if (warningCount >= 2) {
     tone = "warning";
-    headline = "효율 저하 신호가 확인되어 우선 점검이 필요합니다.";
-    summary = "유입 이후 전환 효율과 비용 구조를 함께 보정하는 접근이 필요합니다.";
+    headline = "효율 저하 신호가 보여 우선 순위 점검이 필요한 상태입니다.";
+    summary = "유입 이후 전환 효율과 비용 구조를 함께 손보는 쪽이 빠른 개선에 유리합니다.";
   } else if (positiveCount >= 3 && warningCount === 0) {
     tone = "positive";
-    headline = "성과 흐름이 양호하여 현재 운영 방향을 유지할 수 있습니다.";
-    summary = "효율 지표가 전반적으로 안정적이어서 확장 또는 유지 전략 검토가 가능합니다.";
+    headline = "성과 흐름이 안정적이어서 현재 운영 방향을 유지해도 무리가 없습니다.";
+    summary = "효율 지표가 고르게 유지되고 있어 확장 테스트나 예산 확대 검토가 가능한 구간입니다.";
+  }
+
+  if (comparisonCount >= 2 && warningCount >= 1) {
+    summary = "전기 대비 비교에서도 약세가 확인돼 단기 개선 액션을 빠르게 반영하는 것이 좋습니다.";
+  } else if (comparisonCount >= 2 && positiveCount >= 2) {
+    summary = "전기 대비 흐름까지 함께 보면 성과 개선 방향이 비교적 명확하게 유지되고 있습니다.";
   }
 
   const keySummary: string[] = [];
@@ -258,16 +249,16 @@ export function buildSearchAdReport(input: SearchAdReportInput): SearchAdReportO
 
   if (input.impressions !== null || input.clicks !== null || input.conversions !== null) {
     keySummary.push(
-      `이번 구간은 노출 ${toDisplayNumber(input.impressions, "회")}, 클릭 ${toDisplayNumber(input.clicks, "회")}, 전환 ${toDisplayNumber(input.conversions, "건")} 기준으로 정리했습니다.`,
+      `이번 구간 집계는 노출 ${toDisplayNumber(input.impressions, "회")}, 클릭 ${toDisplayNumber(input.clicks, "회")}, 전환 ${toDisplayNumber(input.conversions, "건")} 기준입니다.`,
     );
   }
 
   keySummary.push(
-    `핵심 효율 지표는 CTR ${toDisplayNumber(ctr, "%")}, CVR ${toDisplayNumber(cvr, "%")}, CPA ${toDisplayNumber(cpa, "원")}, ROAS ${toDisplayNumber(roas, "%")}입니다.`,
+    `핵심 성과 지표는 CTR ${toDisplayNumber(ctr, "%")}, CVR ${toDisplayNumber(cvr, "%")}, CPA ${toDisplayNumber(cpa, "원")}, ROAS ${toDisplayNumber(roas, "%")}입니다.`,
   );
 
   if (estimatedSpend !== null) {
-    keySummary.push(`전환수와 CPA 기준 추정 광고비는 ${toDisplayNumber(estimatedSpend, "원")}입니다.`);
+    keySummary.push(`전환 수와 CPA 기준 추정 광고비는 ${toDisplayNumber(estimatedSpend, "원")}입니다.`);
   }
 
   if (estimatedRevenue !== null) {
@@ -275,37 +266,35 @@ export function buildSearchAdReport(input: SearchAdReportInput): SearchAdReportO
   }
 
   if (ctrTone === "positive") {
-    pushUnique(strengths, `CTR ${toDisplayNumber(ctr, "%")}로 유입 반응이 양호합니다.`);
+    pushUnique(strengths, `CTR ${toDisplayNumber(ctr, "%")}로 유입 반응이 안정적으로 확보되고 있습니다.`);
   } else if (ctrTone === "warning") {
-    pushUnique(watchPoints, `CTR ${toDisplayNumber(ctr, "%")}로 소재 또는 키워드 매칭 점검이 필요합니다.`);
-    pushUnique(actions, "노출 대비 클릭 반응이 낮은 키워드와 소재를 우선 점검하고, 제목·설명문구 테스트를 진행해 주세요.");
+    pushUnique(watchPoints, `CTR ${toDisplayNumber(ctr, "%")}로 소재 또는 키워드 반응 점검이 필요합니다.`);
+    pushUnique(actions, "노출 대비 클릭 반응이 낮은 소재와 키워드를 우선 점검하고 제목/설명 문구 테스트를 진행하세요.");
   }
 
   if (cvrTone === "positive") {
-    pushUnique(strengths, `CVR ${toDisplayNumber(cvr, "%")}로 유입 이후 전환 연결이 안정적입니다.`);
+    pushUnique(strengths, `CVR ${toDisplayNumber(cvr, "%")}로 유입 이후 전환 연결 흐름이 양호합니다.`);
   } else if (cvrTone === "warning") {
-    pushUnique(watchPoints, `CVR ${toDisplayNumber(cvr, "%")}로 랜딩 이후 전환 흐름 개선이 필요합니다.`);
-    pushUnique(actions, "랜딩페이지 메시지와 전환 동선을 점검하고, 검색 의도와 맞지 않는 키워드 유입은 축소해 주세요.");
+    pushUnique(watchPoints, `CVR ${toDisplayNumber(cvr, "%")}로 랜딩 이후 설득 흐름 보완이 필요합니다.`);
+    pushUnique(actions, "랜딩 메시지와 전환 동선을 정리하고 검색 의도와 맞지 않는 유입 키워드는 축소하세요.");
   }
 
   if (cpaTone === "positive") {
-    pushUnique(strengths, `CPA ${toDisplayNumber(cpa, "원")}로 비용 효율이 양호합니다.`);
+    pushUnique(strengths, `CPA ${toDisplayNumber(cpa, "원")} 수준으로 비용 효율이 안정적입니다.`);
   } else if (cpaTone === "warning") {
-    pushUnique(watchPoints, `CPA ${toDisplayNumber(cpa, "원")}로 전환당 비용 부담이 큰 편입니다.`);
-    pushUnique(actions, "고비용 저효율 그룹은 입찰가와 예산 배분을 조정하고, 전환 기여가 낮은 키워드는 제외 검토해 주세요.");
+    pushUnique(watchPoints, `CPA ${toDisplayNumber(cpa, "원")}로 전환당 비용 부담이 커지고 있습니다.`);
+    pushUnique(actions, "고비용 그룹의 예산 비중을 조정하고 전환 기여가 낮은 키워드는 제외 검토가 필요합니다.");
   }
 
   if (roasTone === "positive") {
-    pushUnique(strengths, `ROAS ${toDisplayNumber(roas, "%")}로 매출 기여 효율이 안정적입니다.`);
+    pushUnique(strengths, `ROAS ${toDisplayNumber(roas, "%")}로 매출 기여 효율이 긍정적입니다.`);
   } else if (roasTone === "warning") {
-    pushUnique(watchPoints, `ROAS ${toDisplayNumber(roas, "%")}로 매출 회수력이 약합니다.`);
-    pushUnique(actions, "ROAS가 낮은 캠페인은 예산 확대를 보류하고, 전환 가치가 높은 상품군 또는 키워드 중심으로 재배분해 주세요.");
+    pushUnique(watchPoints, `ROAS ${toDisplayNumber(roas, "%")}로 매출 회수 효율이 부족합니다.`);
+    pushUnique(actions, "ROAS가 낮은 그룹은 예산을 보수적으로 운영하고 전환 가치가 높은 키워드 중심으로 재배분하세요.");
   }
 
   for (const comparison of Object.values(comparisons)) {
-    if (!comparison) {
-      continue;
-    }
+    if (!comparison) continue;
 
     if (comparison.includes("개선")) {
       pushUnique(strengths, comparison);
@@ -316,16 +305,23 @@ export function buildSearchAdReport(input: SearchAdReportInput): SearchAdReportO
     }
   }
 
+  if (comparisonCount >= 2) {
+    pushUnique(
+      keySummary,
+      "전기 대비 지표가 함께 입력되어 비교 코멘트를 포함한 리포트 초안으로 정리했습니다.",
+    );
+  }
+
   if (strengths.length === 0) {
-    pushUnique(strengths, "뚜렷한 강점 지표는 제한적이지만, 일부 지표는 유지 가능한 수준입니다.");
+    pushUnique(strengths, "즉시 강조할 강점은 제한적이지만 일부 지표는 안정적으로 유지되고 있습니다.");
   }
 
   if (watchPoints.length === 0) {
-    pushUnique(watchPoints, "즉시 대응이 필요한 경고 지표는 크지 않으며 현재 운영 흐름을 유지해도 무방합니다.");
+    pushUnique(watchPoints, "즉시 위험으로 보이는 지표는 크지 않으며 현재 흐름을 유지하면서 추세 확인이 필요합니다.");
   }
 
   if (actions.length === 0) {
-    pushUnique(actions, "현재 구조를 유지하면서 다음 기간 동일 기준으로 재측정해 추세를 비교해 주세요.");
+    pushUnique(actions, "현재 운영 구조를 유지하되 다음 보고 구간에서도 동일 기준으로 비교해 추세를 확인하세요.");
   }
 
   return {

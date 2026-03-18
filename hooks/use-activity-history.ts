@@ -1,40 +1,42 @@
 "use client";
 
-import { useState } from "react";
-import { createActivityStore } from "@/lib/history/store";
-import type {
-  ActiveFeatureKey,
-  SaveActivityInput,
-  SavedActivityRecord,
-} from "@/lib/history/types";
+import { useSyncExternalStore } from "react";
+import { createActivityStore, getSavedItemsStorageEventName } from "@/lib/history/store";
+import type { SaveItemInput, SavedFeatureType, SavedItemRecord } from "@/lib/history/types";
 
-export function useActivityHistory(feature?: ActiveFeatureKey) {
-  const [records, setRecords] = useState<SavedActivityRecord[]>(() =>
-    createActivityStore().list(feature),
-  );
+function subscribe(callback: () => void) {
+  const handleChange = () => callback();
+  window.addEventListener("storage", handleChange);
+  window.addEventListener(getSavedItemsStorageEventName(), handleChange);
 
-  const refresh = () => {
-    const store = createActivityStore();
-    setRecords(store.list(feature));
+  return () => {
+    window.removeEventListener("storage", handleChange);
+    window.removeEventListener(getSavedItemsStorageEventName(), handleChange);
   };
+}
 
-  const saveRecord = (input: SaveActivityInput) => {
+export function useActivityHistory(featureType?: SavedFeatureType) {
+  const serializedRecords = useSyncExternalStore(
+    subscribe,
+    () => JSON.stringify(createActivityStore().list(featureType)),
+    () => "[]",
+  );
+  const records = JSON.parse(serializedRecords) as SavedItemRecord[];
+
+  const saveRecord = (input: SaveItemInput) => {
     const store = createActivityStore();
-    const saved = store.save(input);
-    setRecords(store.list(feature));
-    return saved;
+    return store.save(input);
   };
 
   const removeRecord = (id: string) => {
     const store = createActivityStore();
     store.remove(id);
-    setRecords(store.list(feature));
   };
 
   return {
     records,
     saveRecord,
     removeRecord,
-    refresh,
+    refresh: () => undefined,
   };
 }

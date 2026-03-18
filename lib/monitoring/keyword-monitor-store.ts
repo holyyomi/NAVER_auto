@@ -10,6 +10,8 @@ export type MonitorCheckStatus =
   | "quota"
   | "error";
 
+export type MonitorHealthStatus = "normal" | "changed" | "needs-review";
+
 export type MonitorResultSummary = {
   total: number;
   topTitle?: string;
@@ -22,14 +24,18 @@ export type MonitoredKeywordRecord = {
   keyword: string;
   searchType: MonitorSearchType;
   createdAt: string;
-  lastCheckedAt: string | null;
+  latestCheckedAt: string | null;
+  previousCheckedAt: string | null;
   lastStatus: MonitorCheckStatus;
   latestSummary: MonitorResultSummary | null;
+  previousSummary: MonitorResultSummary | null;
+  healthStatus: MonitorHealthStatus;
+  changeSummary: string;
   lastMessage: string | null;
 };
 
 export type KeywordMonitorState = {
-  version: 1;
+  version: 2;
   records: MonitoredKeywordRecord[];
 };
 
@@ -46,11 +52,12 @@ type KeywordMonitorStore = {
   }) => KeywordMonitorState;
 };
 
-const STORAGE_KEY = "naver-auto.keyword-monitor.v1";
+const STORAGE_KEY = "naver-auto.keyword-monitor.v2";
+const LEGACY_STORAGE_KEY = "naver-auto.keyword-monitor.v1";
 const MAX_RECORDS = 30;
 
 const emptyState: KeywordMonitorState = {
-  version: 1,
+  version: 2,
   records: [],
 };
 
@@ -86,12 +93,91 @@ function sanitizeSummary(value: unknown): MonitorResultSummary | null {
   };
 }
 
+function buildHealthStatus(
+  status: Exclude<MonitorCheckStatus, "loading" | "idle">,
+  latestSummary: MonitorResultSummary | null,
+  previousSummary: MonitorResultSummary | null,
+) {
+  if (status === "quota" || status === "error") {
+    return "needs-review" as const;
+  }
+
+  if (status === "empty") {
+    return previousSummary ? ("changed" as const) : ("needs-review" as const);
+  }
+
+  if (!latestSummary || !previousSummary) {
+    return "normal" as const;
+  }
+
+  if (latestSummary.total !== previousSummary.total) {
+    return "changed" as const;
+  }
+
+  if (
+    latestSummary.topTitle !== previousSummary.topTitle ||
+    latestSummary.topSource !== previousSummary.topSource
+  ) {
+    return "changed" as const;
+  }
+
+  return "normal" as const;
+}
+
+function buildChangeSummary(
+  status: Exclude<MonitorCheckStatus, "loading" | "idle">,
+  latestSummary: MonitorResultSummary | null,
+  previousSummary: MonitorResultSummary | null,
+  message?: string | null,
+) {
+  if (status === "quota" || status === "error") {
+    return message ?? "확인 중 오류가 발생했습니다.";
+  }
+
+  if (status === "empty") {
+    if (previousSummary) {
+      return `이전에는 ${previousSummary.total}건이었지만 이번에는 결과가 없습니다.`;
+    }
+
+    return "이번 확인에서는 결과가 없습니다.";
+  }
+
+  if (!latestSummary) {
+    return "비교 가능한 결과가 없습니다.";
+  }
+
+  if (!previousSummary) {
+    return `첫 확인 결과 ${latestSummary.total}건을 저장했습니다.`;
+  }
+
+  const countDiff = latestSummary.total - previousSummary.total;
+  if (countDiff > 0) {
+    return `결과 수가 ${countDiff}건 증가했습니다.`;
+  }
+
+  if (countDiff < 0) {
+    return `결과 수가 ${Math.abs(countDiff)}건 감소했습니다.`;
+  }
+
+  if (
+    latestSummary.topTitle !== previousSummary.topTitle ||
+    latestSummary.topSource !== previousSummary.topSource
+  ) {
+    return "상위 노출 결과가 변경되었습니다.";
+  }
+
+  return "이전 확인 대비 큰 변화가 없습니다.";
+}
+
 function sanitizeRecord(value: unknown): MonitoredKeywordRecord | null {
   if (!value || typeof value !== "object") {
     return null;
   }
 
-  const candidate = value as Partial<MonitoredKeywordRecord>;
+  const candidate = value as Partial<MonitoredKeywordRecord> & {
+    lastCheckedAt?: string | null;
+  };
+
   if (
     typeof candidate.id !== "string" ||
     typeof candidate.keyword !== "string" ||
@@ -106,20 +192,53 @@ function sanitizeRecord(value: unknown): MonitoredKeywordRecord | null {
     return null;
   }
 
+  const latestSummary = sanitizeSummary(candidate.latestSummary);
+  const previousSummary = sanitizeSummary(candidate.previousSummary);
+  const lastStatus =
+    candidate.lastStatus === "success" ||
+    candidate.lastStatus === "empty" ||
+    candidate.lastStatus === "quota" ||
+    candidate.lastStatus === "error"
+      ? candidate.lastStatus
+      : "idle";
+
+  const latestCheckedAt =
+    typeof candidate.latestCheckedAt === "string"
+      ? candidate.latestCheckedAt
+      : typeof candidate.lastCheckedAt === "string"
+        ? candidate.lastCheckedAt
+        : null;
+
   return {
     id: candidate.id,
     keyword,
     searchType: candidate.searchType,
     createdAt: candidate.createdAt,
-    lastCheckedAt: typeof candidate.lastCheckedAt === "string" ? candidate.lastCheckedAt : null,
-    lastStatus:
-      candidate.lastStatus === "success" ||
-      candidate.lastStatus === "empty" ||
-      candidate.lastStatus === "quota" ||
-      candidate.lastStatus === "error"
-        ? candidate.lastStatus
-        : "idle",
-    latestSummary: sanitizeSummary(candidate.latestSummary),
+    latestCheckedAt,
+    previousCheckedAt:
+      typeof candidate.previousCheckedAt === "string" ? candidate.previousCheckedAt : null,
+    lastStatus,
+    latestSummary,
+    previousSummary,
+    healthStatus:
+      candidate.healthStatus === "normal" ||
+      candidate.healthStatus === "changed" ||
+      candidate.healthStatus === "needs-review"
+        ? candidate.healthStatus
+        : lastStatus === "idle"
+          ? "needs-review"
+          : buildHealthStatus(lastStatus, latestSummary, previousSummary),
+    changeSummary:
+      typeof candidate.changeSummary === "string"
+        ? candidate.changeSummary
+        : lastStatus === "idle"
+          ? "아직 확인 이력이 없습니다."
+          : buildChangeSummary(
+              lastStatus,
+              latestSummary,
+              previousSummary,
+              typeof candidate.lastMessage === "string" ? candidate.lastMessage : null,
+            ),
     lastMessage: typeof candidate.lastMessage === "string" ? candidate.lastMessage : null,
   };
 }
@@ -138,7 +257,7 @@ function sanitizeState(value: unknown): KeywordMonitorState {
     : [];
 
   return {
-    version: 1,
+    version: 2,
     records: sortRecords(records).slice(0, MAX_RECORDS),
   };
 }
@@ -149,7 +268,8 @@ function readState() {
   }
 
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw =
+      window.localStorage.getItem(STORAGE_KEY) ?? window.localStorage.getItem(LEGACY_STORAGE_KEY);
     if (!raw) {
       return emptyState;
     }
@@ -205,16 +325,20 @@ class LocalKeywordMonitorStore implements KeywordMonitorStore {
     }
 
     const nextState: KeywordMonitorState = {
-      version: 1,
+      version: 2,
       records: sortRecords([
         {
           id: crypto.randomUUID(),
           keyword,
           searchType: input.searchType,
           createdAt: new Date().toISOString(),
-          lastCheckedAt: null,
+          latestCheckedAt: null,
+          previousCheckedAt: null,
           lastStatus: "idle",
           latestSummary: null,
+          previousSummary: null,
+          healthStatus: "needs-review",
+          changeSummary: "아직 확인 이력이 없습니다.",
           lastMessage: null,
         },
         ...current.records,
@@ -228,7 +352,7 @@ class LocalKeywordMonitorStore implements KeywordMonitorStore {
   remove(id: string) {
     const current = this.read();
     const nextState: KeywordMonitorState = {
-      version: 1,
+      version: 2,
       records: current.records.filter((record) => record.id !== id),
     };
 
@@ -245,18 +369,34 @@ class LocalKeywordMonitorStore implements KeywordMonitorStore {
   }) {
     const current = this.read();
     const nextState: KeywordMonitorState = {
-      version: 1,
-      records: current.records.map((record) =>
-        record.id === input.id
-          ? {
-              ...record,
-              lastCheckedAt: input.checkedAt,
-              lastStatus: input.status,
-              latestSummary: input.summary,
-              lastMessage: input.message ?? null,
-            }
-          : record,
-      ),
+      version: 2,
+      records: current.records.map((record) => {
+        if (record.id !== input.id) {
+          return record;
+        }
+
+        const latestSummary = input.summary;
+        const previousSummary = record.latestSummary;
+        const healthStatus =
+          input.status === "idle"
+            ? record.healthStatus
+            : buildHealthStatus(input.status, latestSummary, previousSummary);
+
+        return {
+          ...record,
+          previousCheckedAt: record.latestCheckedAt,
+          latestCheckedAt: input.checkedAt,
+          lastStatus: input.status,
+          previousSummary,
+          latestSummary,
+          healthStatus,
+          changeSummary:
+            input.status === "idle"
+              ? record.changeSummary
+              : buildChangeSummary(input.status, latestSummary, previousSummary, input.message),
+          lastMessage: input.message ?? null,
+        };
+      }),
     };
 
     writeState(nextState);
