@@ -7,7 +7,9 @@ import { EmptyState } from "@/components/features/shared-states";
 import { FeatureShell } from "@/components/features/feature-shell";
 import { ResultPanel } from "@/components/features/result-panel";
 import { ResultSummaryGrid } from "@/components/features/result-summary-grid";
+import { FeatureUsageGuide } from "@/components/guidance/feature-usage-guide";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { featureUsageGuides } from "@/lib/guidance";
 import { useKeywordMonitor } from "@/hooks/use-keyword-monitor";
 import type { ApiResult, SearchResponse } from "@/lib/naver/types";
 import {
@@ -378,6 +380,8 @@ export function CompetitorKeywordMonitoringPanel() {
     return { total, checked, changed, review };
   }, [state.records]);
 
+  const usageGuide = featureUsageGuides["competitor-keyword-monitoring"];
+
   useEffect(() => {
     const keyword = (searchParams.get("keyword") ?? "").trim();
     const searchType = searchParams.get("searchType");
@@ -593,6 +597,12 @@ export function CompetitorKeywordMonitoringPanel() {
           </div>
         }
       >
+        <FeatureUsageGuide
+          useWhen={usageGuide.useWhen}
+          output={usageGuide.output}
+          nextAction={usageGuide.nextAction}
+          testPoint={usageGuide.testPoint}
+        />
         <ResultSummaryGrid>
           <div className="rounded-xl border border-[var(--line)] bg-[var(--bg-elevated)] px-4 py-4">
             <p className="text-[11px] tracking-[0.14em] text-[var(--text-dim)]">등록 키워드</p>

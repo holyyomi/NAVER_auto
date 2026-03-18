@@ -8,8 +8,10 @@ import { ResultSummaryGrid } from "@/components/features/result-summary-grid";
 import { EmptyState } from "@/components/features/shared-states";
 import { HistoryPanel } from "@/components/history/history-panel";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { FeatureUsageGuide } from "@/components/guidance/feature-usage-guide";
 import { useActivityHistory } from "@/hooks/use-activity-history";
 import { useOpenSavedItem } from "@/hooks/use-open-saved-item";
+import { featureUsageGuides } from "@/lib/guidance";
 import { restoreSearchAdReportRecord } from "@/lib/history/restore";
 import {
   buildSearchAdReport,
@@ -181,6 +183,8 @@ export function SearchAdReportAssistPanel() {
 
   useOpenSavedItem("search-ad-report-assist", applySaved);
 
+  const usageGuide = featureUsageGuides["search-ad-report-assist"];
+
   return (
     <FeatureShell
       title="검색광고 리포트 보조"
@@ -289,6 +293,12 @@ export function SearchAdReportAssistPanel() {
           </div>
         }
       >
+        <FeatureUsageGuide
+          useWhen={usageGuide.useWhen}
+          output={usageGuide.output}
+          nextAction={usageGuide.nextAction}
+          testPoint={usageGuide.testPoint}
+        />
         {!report ? (
           <EmptyState
             title="광고 성과를 입력해 주세요."

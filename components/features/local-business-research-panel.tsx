@@ -10,8 +10,10 @@ import { ResultSummaryGrid } from "@/components/features/result-summary-grid";
 import { EmptyState, ErrorState } from "@/components/features/shared-states";
 import { HistoryPanel } from "@/components/history/history-panel";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { FeatureUsageGuide } from "@/components/guidance/feature-usage-guide";
 import { useActivityHistory } from "@/hooks/use-activity-history";
 import { useOpenSavedItem } from "@/hooks/use-open-saved-item";
+import { featureUsageGuides } from "@/lib/guidance";
 import { restoreLocalBusinessRecord } from "@/lib/history/restore";
 import type { ApiResult, SearchItem, SearchResponse } from "@/lib/naver/types";
 import {
@@ -257,6 +259,8 @@ export function LocalBusinessResearchPanel() {
 
   useOpenSavedItem("local-business-research", applySaved);
 
+  const usageGuide = featureUsageGuides["local-business-research"];
+
   return (
     <FeatureShell
       title="지역 업체 조사"
@@ -367,6 +371,12 @@ export function LocalBusinessResearchPanel() {
           </div>
         }
       >
+        <FeatureUsageGuide
+          useWhen={usageGuide.useWhen}
+          output={usageGuide.output}
+          nextAction={usageGuide.nextAction}
+          testPoint={usageGuide.testPoint}
+        />
         {!result ? (
           <EmptyState
             title="조사 조건을 입력하세요."

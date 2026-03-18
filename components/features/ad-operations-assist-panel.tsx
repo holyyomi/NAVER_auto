@@ -8,8 +8,10 @@ import { ResultSummaryGrid } from "@/components/features/result-summary-grid";
 import { EmptyState } from "@/components/features/shared-states";
 import { HistoryPanel } from "@/components/history/history-panel";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { FeatureUsageGuide } from "@/components/guidance/feature-usage-guide";
 import { useActivityHistory } from "@/hooks/use-activity-history";
 import { useOpenSavedItem } from "@/hooks/use-open-saved-item";
+import { featureUsageGuides } from "@/lib/guidance";
 import { restoreAdOperationsRecord } from "@/lib/history/restore";
 import {
   buildAdOperationsAssist,
@@ -176,6 +178,8 @@ export function AdOperationsAssistPanel() {
 
   useOpenSavedItem("ad-operations-assist", applySaved);
 
+  const usageGuide = featureUsageGuides["ad-operations-assist"];
+
   return (
     <FeatureShell
       title="광고 운영 보조"
@@ -281,6 +285,12 @@ export function AdOperationsAssistPanel() {
           </div>
         }
       >
+        <FeatureUsageGuide
+          useWhen={usageGuide.useWhen}
+          output={usageGuide.output}
+          nextAction={usageGuide.nextAction}
+          testPoint={usageGuide.testPoint}
+        />
         {!result ? (
           <EmptyState
             title="운영 지표를 입력해 주세요."

@@ -10,8 +10,10 @@ import { ResultSummaryGrid } from "@/components/features/result-summary-grid";
 import { EmptyState, ErrorState } from "@/components/features/shared-states";
 import { HistoryPanel } from "@/components/history/history-panel";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { FeatureUsageGuide } from "@/components/guidance/feature-usage-guide";
 import { useActivityHistory } from "@/hooks/use-activity-history";
 import { useOpenSavedItem } from "@/hooks/use-open-saved-item";
+import { featureUsageGuides } from "@/lib/guidance";
 import { restoreSearchResultsRecord } from "@/lib/history/restore";
 import type { ApiResult, SearchItem, SearchResponse } from "@/lib/naver/types";
 import type { SearchType } from "@/lib/search/workbench-store";
@@ -489,6 +491,8 @@ export function SearchResultsPanel() {
 
   useOpenSavedItem("search-results", applySaved);
 
+  const usageGuide = featureUsageGuides["search-results-hub"];
+
   return (
     <FeatureShell
       title="검색 결과 모음"
@@ -587,6 +591,12 @@ export function SearchResultsPanel() {
           </div>
         }
       >
+        <FeatureUsageGuide
+          useWhen={usageGuide.useWhen}
+          output={usageGuide.output}
+          nextAction={usageGuide.nextAction}
+          testPoint={usageGuide.testPoint}
+        />
         {!result ? (
           <EmptyState
             title="검색어를 입력해 주세요."
