@@ -1,6 +1,8 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { ActiveFeatureLayout } from "@/components/features/active-feature-layout";
 import { FeatureShell } from "@/components/features/feature-shell";
 import { ResultPanel } from "@/components/features/result-panel";
@@ -10,7 +12,12 @@ import { HistoryPanel } from "@/components/history/history-panel";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useActivityHistory } from "@/hooks/use-activity-history";
 import { useOpenSavedItem } from "@/hooks/use-open-saved-item";
+import { restoreLocalBusinessRecord } from "@/lib/history/restore";
 import type { ApiResult, SearchItem, SearchResponse } from "@/lib/naver/types";
+import {
+  buildCompetitorMonitorHref,
+  buildSearchResultsHref,
+} from "@/lib/workflow/cross-feature-links";
 
 type ResearchForm = {
   region: string;
@@ -104,8 +111,12 @@ export function LocalBusinessResearchPanel() {
   const [result, setResult] = useState<ApiResult<SearchResponse> | null>(null);
   const [queryText, setQueryText] = useState(buildQuery(initialForm));
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [restoreNotice, setRestoreNotice] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const { records, saveRecord, removeRecord } = useActivityHistory("local-business-research");
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
   const researchCues = useMemo(
     () => (result?.ok ? buildLocalResearchCues(form, result.data.items) : null),
@@ -132,6 +143,7 @@ export function LocalBusinessResearchPanel() {
 
         const data = (await response.json()) as ApiResult<SearchResponse>;
         setResult(data);
+        setRestoreNotice(null);
       } catch {
         setResult({
           ok: false,
@@ -141,6 +153,73 @@ export function LocalBusinessResearchPanel() {
     });
   };
 
+  useEffect(() => {
+    const region = searchParams.get("region") ?? "";
+    const businessKeyword = searchParams.get("businessKeyword") ?? "";
+    const businessName = searchParams.get("businessName") ?? "";
+    const searchType = searchParams.get("searchType");
+    const autoRun = searchParams.get("autoRun") === "1";
+
+    if (
+      !businessKeyword &&
+      !region &&
+      !businessName
+    ) {
+      return;
+    }
+
+    if (searchType !== "blog" && searchType !== "news" && searchType !== "shopping") {
+      return;
+    }
+
+    const nextForm = {
+      region,
+      businessKeyword,
+      businessName,
+      searchType,
+    } satisfies ResearchForm;
+
+    const timer = window.setTimeout(() => {
+      setForm(nextForm);
+      setQueryText(buildQuery(nextForm));
+      if (autoRun && buildQuery(nextForm)) {
+        setResult(null);
+        startTransition(async () => {
+          try {
+            const response = await fetch("/api/search", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                keyword: buildQuery(nextForm),
+                searchType: nextForm.searchType,
+              }),
+            });
+
+            const data = (await response.json()) as ApiResult<SearchResponse>;
+            setResult(data);
+            setRestoreNotice(null);
+          } catch {
+            setResult({
+              ok: false,
+              error: "지역 업체 조사 결과를 불러오지 못했습니다.",
+            });
+          }
+        });
+      }
+    }, 0);
+
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.delete("region");
+    nextParams.delete("businessKeyword");
+    nextParams.delete("businessName");
+    nextParams.delete("searchType");
+    nextParams.delete("autoRun");
+    const nextUrl = nextParams.size > 0 ? `${pathname}?${nextParams.toString()}` : pathname;
+    router.replace(nextUrl, { scroll: false });
+
+    return () => window.clearTimeout(timer);
+  }, [pathname, router, searchParams, startTransition]);
+
   const handleSave = () => {
     if (!result?.ok || result.data.items.length === 0) {
       return;
@@ -148,8 +227,8 @@ export function LocalBusinessResearchPanel() {
 
     saveRecord({
       featureType: "local-business-research",
-      title: queryText,
-      summary: `${form.region} ${form.businessKeyword} 조사 결과 ${result.data.items.length}건을 저장했습니다.`,
+      title: `${form.region} | ${form.businessKeyword}`,
+      summary: `${form.region} 지역의 ${form.businessKeyword} 조사 결과 ${result.data.items.length}건을 저장했습니다.`,
       fields: [
         { label: "지역", value: form.region || "-" },
         { label: "업종/키워드", value: form.businessKeyword || "-" },
@@ -164,10 +243,16 @@ export function LocalBusinessResearchPanel() {
   };
 
   const applySaved = (record: (typeof records)[number]) => {
-    const nextForm = record.inputSnapshot as ResearchForm;
-    setForm(nextForm);
-    setQueryText(buildQuery(nextForm));
-    setResult(record.outputSnapshot as ApiResult<SearchResponse>);
+    const restored = restoreLocalBusinessRecord<ResearchForm>(record);
+    if (!restored.ok) {
+      setRestoreNotice(restored.message);
+      return;
+    }
+
+    setForm(restored.input);
+    setQueryText(buildQuery(restored.input));
+    setResult(restored.output);
+    setRestoreNotice(null);
   };
 
   useOpenSavedItem("local-business-research", applySaved);
@@ -261,9 +346,12 @@ export function LocalBusinessResearchPanel() {
                     disabled={!result?.ok || result.data.items.length === 0}
                     className="inline-flex h-11 w-full items-center justify-center rounded-lg border border-[var(--line)] bg-transparent text-sm font-medium text-[var(--text-body)] transition hover:border-[var(--line-strong)] hover:text-[var(--text-strong)] disabled:opacity-40"
                   >
-                    {saveMessage ?? "조사 저장"}
+                    {saveMessage ?? (result?.ok && result.data.items.length > 0 ? "조사 저장" : "결과 생성 후 저장 가능")}
                   </button>
                 </div>
+                {restoreNotice ? (
+                  <p className="text-xs text-[var(--warning-text)]">{restoreNotice}</p>
+                ) : null}
               </div>
             </div>
 
@@ -395,6 +483,52 @@ export function LocalBusinessResearchPanel() {
                     </div>
                   </article>
                 ))}
+              </div>
+            </ResultPanel>
+
+            <ResultPanel
+              title="후속 액션"
+              description="현재 지역 조사 결과를 모니터링이나 확장 검색으로 바로 넘길 수 있습니다."
+              aside={<StatusBadge tone="neutral">Cross Workflow</StatusBadge>}
+            >
+              <div className="grid gap-3 xl:grid-cols-3">
+                <Link
+                  href={buildCompetitorMonitorHref({
+                    keyword: queryText,
+                    searchType: form.searchType,
+                    autoRegister: true,
+                  })}
+                  className="rounded-xl border border-[var(--line)] bg-[rgba(255,255,255,0.02)] px-4 py-4 transition hover:border-[var(--line-strong)]"
+                >
+                  <p className="text-sm font-medium text-[var(--text-strong)]">경쟁 키워드 모니터링 등록</p>
+                  <p className="mt-2 text-sm leading-6 text-[var(--text-body)]">
+                    현재 조사 조합을 모니터링 목록에 넘겨 반복 확인용 키워드로 등록합니다.
+                  </p>
+                </Link>
+                <Link
+                  href={buildSearchResultsHref({
+                    keyword: queryText,
+                    searchType: form.searchType,
+                    autoRun: true,
+                  })}
+                  className="rounded-xl border border-[var(--line)] bg-[rgba(255,255,255,0.02)] px-4 py-4 transition hover:border-[var(--line-strong)]"
+                >
+                  <p className="text-sm font-medium text-[var(--text-strong)]">검색 결과 모음으로 확장</p>
+                  <p className="mt-2 text-sm leading-6 text-[var(--text-body)]">
+                    현재 조사 조합을 검색 결과 모음에서 다시 열어 복사, CSV, 저장 작업으로 이어갑니다.
+                  </p>
+                </Link>
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={!result?.ok || result.data.items.length === 0}
+                  className="rounded-xl border border-[var(--line)] bg-[rgba(255,255,255,0.02)] px-4 py-4 text-left transition hover:border-[var(--line-strong)] disabled:opacity-40"
+                >
+                  <p className="text-sm font-medium text-[var(--text-strong)]">조사 결과 저장</p>
+                  <p className="mt-2 text-sm leading-6 text-[var(--text-body)]">
+                    지역 조사 스냅샷을 최근 저장에 남겨 제안 검토나 재조사 때 바로 다시 엽니다.
+                  </p>
+                </button>
               </div>
             </ResultPanel>
           </>

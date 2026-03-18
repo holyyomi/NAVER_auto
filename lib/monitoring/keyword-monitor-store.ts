@@ -93,6 +93,31 @@ function sanitizeSummary(value: unknown): MonitorResultSummary | null {
   };
 }
 
+function hasTopResultChanged(
+  latestSummary: MonitorResultSummary | null,
+  previousSummary: MonitorResultSummary | null,
+) {
+  if (!latestSummary || !previousSummary) {
+    return false;
+  }
+
+  return (
+    latestSummary.topTitle !== previousSummary.topTitle ||
+    latestSummary.topSource !== previousSummary.topSource
+  );
+}
+
+function hasCountChanged(
+  latestSummary: MonitorResultSummary | null,
+  previousSummary: MonitorResultSummary | null,
+) {
+  if (!latestSummary || !previousSummary) {
+    return false;
+  }
+
+  return latestSummary.total !== previousSummary.total;
+}
+
 function buildHealthStatus(
   status: Exclude<MonitorCheckStatus, "loading" | "idle">,
   latestSummary: MonitorResultSummary | null,
@@ -106,18 +131,15 @@ function buildHealthStatus(
     return previousSummary ? ("changed" as const) : ("needs-review" as const);
   }
 
-  if (!latestSummary || !previousSummary) {
+  if (!latestSummary) {
+    return "needs-review" as const;
+  }
+
+  if (!previousSummary) {
     return "normal" as const;
   }
 
-  if (latestSummary.total !== previousSummary.total) {
-    return "changed" as const;
-  }
-
-  if (
-    latestSummary.topTitle !== previousSummary.topTitle ||
-    latestSummary.topSource !== previousSummary.topSource
-  ) {
+  if (hasCountChanged(latestSummary, previousSummary) || hasTopResultChanged(latestSummary, previousSummary)) {
     return "changed" as const;
   }
 
@@ -131,42 +153,43 @@ function buildChangeSummary(
   message?: string | null,
 ) {
   if (status === "quota" || status === "error") {
-    return message ?? "확인 중 오류가 발생했습니다.";
+    return message ?? "확인 중 오류가 발생해 다시 점검이 필요합니다.";
   }
 
   if (status === "empty") {
     if (previousSummary) {
-      return `이전에는 ${previousSummary.total}건이었지만 이번에는 결과가 없습니다.`;
+      return `이전 확인에는 ${previousSummary.total}건이 있었지만 이번에는 결과가 보이지 않습니다.`;
     }
 
-    return "이번 확인에서는 결과가 없습니다.";
+    return "이번 확인에서는 결과가 없어 기준 스냅샷을 만들지 못했습니다.";
   }
 
   if (!latestSummary) {
-    return "비교 가능한 결과가 없습니다.";
+    return "비교할 최신 스냅샷을 만들지 못했습니다.";
   }
 
   if (!previousSummary) {
-    return `첫 확인 결과 ${latestSummary.total}건을 저장했습니다.`;
+    return `첫 확인 기준으로 결과 ${latestSummary.total}건을 저장했습니다. 다음 확인부터 변화 비교가 가능합니다.`;
   }
 
+  const details: string[] = [];
   const countDiff = latestSummary.total - previousSummary.total;
+
   if (countDiff > 0) {
-    return `결과 수가 ${countDiff}건 증가했습니다.`;
+    details.push(`결과 수가 ${countDiff}건 증가했습니다.`);
+  } else if (countDiff < 0) {
+    details.push(`결과 수가 ${Math.abs(countDiff)}건 감소했습니다.`);
   }
 
-  if (countDiff < 0) {
-    return `결과 수가 ${Math.abs(countDiff)}건 감소했습니다.`;
+  if (hasTopResultChanged(latestSummary, previousSummary)) {
+    details.push("상위 노출 결과가 변경되었습니다.");
   }
 
-  if (
-    latestSummary.topTitle !== previousSummary.topTitle ||
-    latestSummary.topSource !== previousSummary.topSource
-  ) {
-    return "상위 노출 결과가 변경되었습니다.";
+  if (details.length === 0) {
+    return "이전 확인 대비 큰 변화가 없습니다.";
   }
 
-  return "이전 확인 대비 큰 변화가 없습니다.";
+  return details.join(" ");
 }
 
 function sanitizeRecord(value: unknown): MonitoredKeywordRecord | null {
@@ -232,7 +255,7 @@ function sanitizeRecord(value: unknown): MonitoredKeywordRecord | null {
       typeof candidate.changeSummary === "string"
         ? candidate.changeSummary
         : lastStatus === "idle"
-          ? "아직 확인 이력이 없습니다."
+          ? "아직 확인 이력이 없습니다. 첫 확인을 실행하면 비교 기준이 생성됩니다."
           : buildChangeSummary(
               lastStatus,
               latestSummary,
@@ -338,7 +361,7 @@ class LocalKeywordMonitorStore implements KeywordMonitorStore {
           latestSummary: null,
           previousSummary: null,
           healthStatus: "needs-review",
-          changeSummary: "아직 확인 이력이 없습니다.",
+          changeSummary: "아직 확인 이력이 없습니다. 첫 확인을 실행하면 비교 기준이 생성됩니다.",
           lastMessage: null,
         },
         ...current.records,

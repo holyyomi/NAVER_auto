@@ -1,6 +1,7 @@
 export type NaverRuntimeMode = "real" | "demo";
 export type ApiErrorCode =
   | "validation_error"
+  | "unsupported_type"
   | "config_error"
   | "timeout_error"
   | "payload_error"

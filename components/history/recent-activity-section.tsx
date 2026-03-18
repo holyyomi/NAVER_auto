@@ -9,10 +9,10 @@ export function RecentActivitySection() {
   return (
     <HistoryPanel
       title="최근 저장"
-      description="기능별 저장 결과를 다시 열고 정리합니다."
+      description="리서치, 리포트, 운영 점검 결과를 다시 열기 쉬운 순서로 모아둡니다."
       records={records.slice(0, 6)}
-      emptyTitle="저장 항목 없음"
-      emptyDescription="리서치와 운영 결과를 저장하면 여기에서 최근 항목을 바로 열 수 있습니다."
+      emptyTitle="저장된 항목이 없습니다"
+      emptyDescription="기능별 결과를 저장하면 홈에서 최근 작업을 바로 다시 열 수 있습니다."
       onRemove={removeRecord}
     />
   );

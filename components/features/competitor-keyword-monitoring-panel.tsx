@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import { ActiveFeatureLayout } from "@/components/features/active-feature-layout";
 import { EmptyState } from "@/components/features/shared-states";
 import { FeatureShell } from "@/components/features/feature-shell";
@@ -41,12 +42,12 @@ function getHealthTone(status: MonitorHealthStatus) {
 
 function formatTimestamp(timestamp: string | null) {
   if (!timestamp) {
-    return "기록 없음";
+    return "확인 이력 없음";
   }
 
   const parsed = new Date(timestamp);
   if (Number.isNaN(parsed.getTime())) {
-    return "기록 없음";
+    return "확인 이력 없음";
   }
 
   return new Intl.DateTimeFormat("ko-KR", {
@@ -58,13 +59,13 @@ function formatTimestamp(timestamp: string | null) {
   }).format(parsed);
 }
 
-function buildCountChangeLabel(record: MonitoredKeywordRecord) {
+function buildCountDiff(record: MonitoredKeywordRecord) {
   if (!record.latestSummary) {
     return "최신 결과 없음";
   }
 
   if (!record.previousSummary) {
-    return "첫 비교 기준";
+    return "첫 비교 전";
   }
 
   const diff = record.latestSummary.total - record.previousSummary.total;
@@ -79,13 +80,68 @@ function buildCountChangeLabel(record: MonitoredKeywordRecord) {
   return "변화 없음";
 }
 
+function buildStatusReason(record: MonitoredKeywordRecord) {
+  if (record.healthStatus === "needs-review") {
+    if (record.lastStatus === "quota") {
+      return "호출 한도 이슈로 이번 비교를 완료하지 못했습니다.";
+    }
+
+    if (record.lastStatus === "error") {
+      return "검색 요청 오류로 최신 비교 기준을 만들지 못했습니다.";
+    }
+
+    if (!record.latestSummary) {
+      return "아직 비교 기준이 없어서 먼저 첫 확인이 필요합니다.";
+    }
+
+    return "비교 기준이 부족해 추가 확인이 필요합니다.";
+  }
+
+  if (!record.previousSummary) {
+    return "첫 확인 기준이 저장된 상태입니다. 다음 확인부터 변화 비교가 가능합니다.";
+  }
+
+  if (record.healthStatus === "changed") {
+    return record.changeSummary;
+  }
+
+  return "이전 확인과 비교해 결과 수와 상위 노출 구성이 안정적입니다.";
+}
+
+function buildTopResultDiff(record: MonitoredKeywordRecord) {
+  if (!record.latestSummary) {
+    return "최신 상위 결과가 없습니다.";
+  }
+
+  if (!record.previousSummary) {
+    return "이전 비교 기준이 없어 다음 확인부터 상위 결과 변화를 확인할 수 있습니다.";
+  }
+
+  const titleChanged = record.latestSummary.topTitle !== record.previousSummary.topTitle;
+  const sourceChanged = record.latestSummary.topSource !== record.previousSummary.topSource;
+
+  if (!titleChanged && !sourceChanged) {
+    return "상위 제목과 출처가 이전 확인과 동일합니다.";
+  }
+
+  if (titleChanged && sourceChanged) {
+    return "상위 제목과 출처가 모두 변경되었습니다.";
+  }
+
+  if (titleChanged) {
+    return "상위 제목이 변경되었습니다.";
+  }
+
+  return "상위 출처가 변경되었습니다.";
+}
+
 function getUserMessage(result: ApiResult<SearchResponse>) {
   if (result.ok) {
     return null;
   }
 
-  if (result.error.includes("호출 시도")) {
-    return "오늘 사용 가능한 호출 시도를 초과했습니다. 내일 다시 확인해 주세요.";
+  if (result.error.includes("호출 한도") || result.error.includes("초과")) {
+    return "오늘 사용 가능한 검색 호출 한도를 초과했습니다. 내일 다시 확인해 주세요.";
   }
 
   return result.error;
@@ -105,8 +161,11 @@ function downloadCsv(records: MonitoredKeywordRecord[]) {
     "latestResultCount",
     "previousResultCount",
     "changeSummary",
+    "statusReason",
     "latestTopTitle",
     "previousTopTitle",
+    "latestTopSource",
+    "previousTopSource",
   ];
 
   const escapeCell = (value: string | number | null | undefined) =>
@@ -122,8 +181,11 @@ function downloadCsv(records: MonitoredKeywordRecord[]) {
       record.latestSummary?.total ?? "",
       record.previousSummary?.total ?? "",
       record.changeSummary,
+      buildStatusReason(record),
       record.latestSummary?.topTitle ?? "",
       record.previousSummary?.topTitle ?? "",
+      record.latestSummary?.topSource ?? "",
+      record.previousSummary?.topSource ?? "",
     ]
       .map(escapeCell)
       .join(","),
@@ -144,14 +206,47 @@ async function copySummary(record: MonitoredKeywordRecord) {
     `키워드: ${record.keyword}`,
     `유형: ${getTypeLabel(record.searchType)}`,
     `상태: ${getHealthLabel(record.healthStatus)}`,
+    `상태 이유: ${buildStatusReason(record)}`,
     `최신 확인: ${formatTimestamp(record.latestCheckedAt)}`,
     `이전 확인: ${formatTimestamp(record.previousCheckedAt)}`,
     `최신 결과 수: ${record.latestSummary?.total ?? "-"}`,
     `이전 결과 수: ${record.previousSummary?.total ?? "-"}`,
+    `결과 수 차이: ${buildCountDiff(record)}`,
+    `상위 결과 비교: ${buildTopResultDiff(record)}`,
     `변화 요약: ${record.changeSummary}`,
   ];
 
   await navigator.clipboard.writeText(lines.join("\n"));
+}
+
+function SnapshotCard({
+  title,
+  checkedAt,
+  summary,
+  highlight,
+}: {
+  title: string;
+  checkedAt: string | null;
+  summary: MonitoredKeywordRecord["latestSummary"];
+  highlight?: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-xl border px-4 py-4 ${
+        highlight
+          ? "border-[var(--line-strong)] bg-[rgba(255,255,255,0.04)]"
+          : "border-[var(--line)] bg-[var(--bg-elevated)]"
+      }`}
+    >
+      <p className="text-[11px] tracking-[0.12em] text-[var(--text-dim)]">{title}</p>
+      <div className="mt-3 space-y-1 text-sm text-[var(--text-body)]">
+        <p>확인 시각: {formatTimestamp(checkedAt)}</p>
+        <p>결과 수: {summary?.total ?? "-"}</p>
+        <p className="truncate">상위 제목: {summary?.topTitle ?? "비교 기준 없음"}</p>
+        <p>출처: {summary?.topSource ?? "비교 기준 없음"}</p>
+      </div>
+    </div>
+  );
 }
 
 function MonitorCard({
@@ -179,40 +274,48 @@ function MonitorCard({
               {getTypeLabel(record.searchType)}
             </span>
             <span className="rounded-md border border-[var(--line)] px-2 py-1 text-[11px] text-[var(--text-dim)]">
-              결과 변화 {buildCountChangeLabel(record)}
+              결과 수 {buildCountDiff(record)}
             </span>
           </div>
 
           <div className="mt-4 flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
               <h3 className="text-base font-semibold text-[var(--text-strong)]">{record.keyword}</h3>
-              <p className="mt-1 text-sm text-[var(--text-dim)]">
-                {record.changeSummary}
-              </p>
+              <p className="mt-1 text-sm text-[var(--text-dim)]">{buildStatusReason(record)}</p>
             </div>
             {record.lastMessage && record.healthStatus === "needs-review" ? (
               <p className="max-w-md text-sm text-[var(--warning-text)]">{record.lastMessage}</p>
             ) : null}
           </div>
 
+          <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+            <SnapshotCard
+              title={isChecking ? "최신 스냅샷 갱신 중" : "최신 스냅샷"}
+              checkedAt={record.latestCheckedAt}
+              summary={record.latestSummary}
+              highlight
+            />
+            <SnapshotCard
+              title="이전 스냅샷"
+              checkedAt={record.previousCheckedAt}
+              summary={record.previousSummary}
+            />
+          </div>
+
           <div className="mt-4 grid gap-3 lg:grid-cols-2">
             <div className="rounded-xl border border-[var(--line)] bg-[var(--bg-elevated)] px-4 py-4">
-              <p className="text-[11px] tracking-[0.12em] text-[var(--text-dim)]">최신 스냅샷</p>
-              <div className="mt-3 space-y-1 text-sm text-[var(--text-body)]">
-                <p>확인 시각: {isChecking ? "확인 중..." : formatTimestamp(record.latestCheckedAt)}</p>
-                <p>결과 수: {record.latestSummary?.total ?? "-"}</p>
-                <p className="truncate">상위 제목: {record.latestSummary?.topTitle ?? "-"}</p>
-                <p>출처: {record.latestSummary?.topSource ?? "-"}</p>
+              <p className="text-[11px] tracking-[0.12em] text-[var(--text-dim)]">변화 비교</p>
+              <div className="mt-3 space-y-2 text-sm leading-6 text-[var(--text-body)]">
+                <p>{record.changeSummary}</p>
+                <p>{buildTopResultDiff(record)}</p>
               </div>
             </div>
-
             <div className="rounded-xl border border-[var(--line)] bg-[var(--bg-elevated)] px-4 py-4">
-              <p className="text-[11px] tracking-[0.12em] text-[var(--text-dim)]">이전 스냅샷</p>
-              <div className="mt-3 space-y-1 text-sm text-[var(--text-body)]">
-                <p>확인 시각: {formatTimestamp(record.previousCheckedAt)}</p>
-                <p>결과 수: {record.previousSummary?.total ?? "-"}</p>
-                <p className="truncate">상위 제목: {record.previousSummary?.topTitle ?? "-"}</p>
-                <p>출처: {record.previousSummary?.topSource ?? "-"}</p>
+              <p className="text-[11px] tracking-[0.12em] text-[var(--text-dim)]">실무 활용 메모</p>
+              <div className="mt-3 space-y-2 text-sm leading-6 text-[var(--text-body)]">
+                <p>제안 준비: 키워드별 노출 안정성 여부를 빠르게 확인할 수 있습니다.</p>
+                <p>경쟁 추적: 상위 제목과 출처 변경 여부를 기준으로 이상 징후를 잡아낼 수 있습니다.</p>
+                <p>로컬 점검: 지역 키워드 조합의 반복 확인용 기준으로 활용할 수 있습니다.</p>
               </div>
             </div>
           </div>
@@ -232,7 +335,7 @@ function MonitorCard({
             onClick={() => onCopy(record)}
             className="inline-flex h-10 items-center justify-center rounded-lg border border-[var(--line)] px-4 text-sm font-medium text-[var(--text-body)] transition hover:border-[var(--line-strong)] hover:text-[var(--text-strong)]"
           >
-            요약 복사
+            비교 요약 복사
           </button>
           {record.latestSummary?.topLink ? (
             <a
@@ -262,6 +365,9 @@ export function CompetitorKeywordMonitoringPanel() {
   const [panelMessage, setPanelMessage] = useState<string | null>(null);
   const [checkingId, setCheckingId] = useState<string | null>(null);
   const { state, addKeyword, removeKeyword, updateCheckResult } = useKeywordMonitor();
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
   const stats = useMemo(() => {
     const total = state.records.length;
@@ -271,6 +377,43 @@ export function CompetitorKeywordMonitoringPanel() {
 
     return { total, checked, changed, review };
   }, [state.records]);
+
+  useEffect(() => {
+    const keyword = (searchParams.get("keyword") ?? "").trim();
+    const searchType = searchParams.get("searchType");
+    const autoRegister = searchParams.get("autoRegister") === "1";
+
+    if (!keyword || (searchType !== "blog" && searchType !== "news" && searchType !== "shopping")) {
+      return;
+    }
+
+    setForm({
+      keyword,
+      searchType,
+    });
+
+    if (autoRegister) {
+      const beforeCount = state.records.length;
+      const next = addKeyword({
+        keyword,
+        searchType,
+      });
+
+      setPanelMessage(
+        next.records.length === beforeCount
+          ? `"${keyword}" 키워드는 이미 모니터링 목록에 있습니다.`
+          : `"${keyword}" 키워드를 모니터링 목록에 등록했습니다.`,
+      );
+      window.setTimeout(() => setPanelMessage(null), 1800);
+    }
+
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.delete("keyword");
+    nextParams.delete("searchType");
+    nextParams.delete("autoRegister");
+    const nextUrl = nextParams.size > 0 ? `${pathname}?${nextParams.toString()}` : pathname;
+    router.replace(nextUrl, { scroll: false });
+  }, [addKeyword, pathname, router, searchParams, state.records.length]);
 
   const handleAdd = () => {
     const keyword = form.keyword.trim();
@@ -309,7 +452,7 @@ export function CompetitorKeywordMonitoringPanel() {
   const handleCopy = async (record: MonitoredKeywordRecord) => {
     try {
       await copySummary(record);
-      setPanelMessage(`"${record.keyword}" 요약을 복사했습니다.`);
+      setPanelMessage(`"${record.keyword}" 비교 요약을 복사했습니다.`);
     } catch {
       setPanelMessage("클립보드 복사에 실패했습니다.");
     } finally {
@@ -346,11 +489,11 @@ export function CompetitorKeywordMonitoringPanel() {
         updateCheckResult({
           id: record.id,
           checkedAt,
-          status: result.error.includes("호출 시도") ? "quota" : "error",
+          status: result.error.includes("호출 한도") || result.error.includes("초과") ? "quota" : "error",
           summary: null,
           message: getUserMessage(result),
         });
-        setPanelMessage(`"${record.keyword}" 확인 중 점검이 필요한 상태가 감지되었습니다.`);
+        setPanelMessage(`"${record.keyword}" 확인 결과 점검이 필요한 상태입니다.`);
       }
     } catch {
       updateCheckResult({
@@ -370,7 +513,7 @@ export function CompetitorKeywordMonitoringPanel() {
   return (
     <FeatureShell
       title="경쟁 키워드 모니터링"
-      description="제안 검토, 경쟁사 추적, 로컬 시장 점검에 필요한 키워드를 저장하고 변화 여부를 비교해서 확인합니다."
+      description="제안 준비, 경쟁 추적, 지역 시장 점검에 필요한 키워드를 저장하고 이전 대비 변화 여부를 비교해서 확인합니다."
     >
       <ActiveFeatureLayout
         controls={
@@ -442,9 +585,9 @@ export function CompetitorKeywordMonitoringPanel() {
             <div className="rounded-xl border border-[var(--line)] bg-[rgba(255,255,255,0.02)] px-4 py-4">
               <p className="text-sm font-medium text-[var(--text-strong)]">활용 포인트</p>
               <div className="mt-3 space-y-2 text-sm text-[var(--text-body)]">
-                <p>1. 제안 대상 업종, 지역 키워드, 경쟁사 관련어를 묶어서 관리합니다.</p>
-                <p>2. 최신 확인과 이전 확인을 비교해 노출 수 변화와 상위 결과 변화를 바로 봅니다.</p>
-                <p>3. 변화 있음과 확인 필요 상태를 우선 검토해 보고서나 운영 액션 후보로 넘깁니다.</p>
+                <p>1. 제안 대상 업종, 지역 키워드, 경쟁사 관련어를 묶어서 비교 기준으로 관리합니다.</p>
+                <p>2. 이전 스냅샷과 최신 스냅샷을 비교해 결과 수와 상위 결과 변화를 바로 확인합니다.</p>
+                <p>3. 변화 있음과 확인 필요 상태를 우선 검토해 제안 메모나 운영 액션 후보로 넘깁니다.</p>
               </div>
             </div>
           </div>
@@ -477,7 +620,7 @@ export function CompetitorKeywordMonitoringPanel() {
         ) : (
           <ResultPanel
             title="모니터링 목록"
-            description="각 키워드의 최신 스냅샷과 이전 스냅샷을 비교해 변화 여부를 빠르게 점검합니다."
+            description="각 키워드의 최신 스냅샷과 이전 스냅샷을 나란히 비교해 변화 여부를 빠르게 점검합니다."
             aside={<StatusBadge tone="neutral">비교 스냅샷</StatusBadge>}
           >
             <div className="space-y-3">

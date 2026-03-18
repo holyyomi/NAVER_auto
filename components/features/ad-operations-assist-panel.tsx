@@ -10,6 +10,7 @@ import { HistoryPanel } from "@/components/history/history-panel";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useActivityHistory } from "@/hooks/use-activity-history";
 import { useOpenSavedItem } from "@/hooks/use-open-saved-item";
+import { restoreAdOperationsRecord } from "@/lib/history/restore";
 import {
   buildAdOperationsAssist,
   type AdOperationsInput,
@@ -66,7 +67,7 @@ function formatNumber(value: number | null, suffix = "") {
 }
 
 function getStatusLabel(status: OperationStatus) {
-  if (status === "risk") return "리스크";
+  if (status === "risk") return "위험";
   if (status === "review") return "점검 필요";
   return "정상";
 }
@@ -75,6 +76,22 @@ function getStatusTone(status: OperationStatus) {
   if (status === "risk") return "attention" as const;
   if (status === "review") return "pending" as const;
   return "active" as const;
+}
+
+function buildOperationSummaryCopy(result: AdOperationsOutput) {
+  return [
+    `[현재 상태]`,
+    `${result.headline} ${result.summary}`,
+    "",
+    `[문제 가능 구간]`,
+    ...result.causes.map((item) => `- ${item}`),
+    "",
+    `[바로 할 액션]`,
+    ...result.actions.map((item) => `- ${item}`),
+    "",
+    `[운영 메모]`,
+    result.note,
+  ].join("\n");
 }
 
 function ActionList({ items }: { items: string[] }) {
@@ -97,11 +114,13 @@ export function AdOperationsAssistPanel() {
   const [result, setResult] = useState<AdOperationsOutput | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
+  const [restoreNotice, setRestoreNotice] = useState<string | null>(null);
   const { records, saveRecord, removeRecord } = useActivityHistory("ad-operations-assist");
   const parsedInput = useMemo(() => toInput(form), [form]);
 
   const handleAnalyze = () => {
     setResult(buildAdOperationsAssist(parsedInput));
+    setRestoreNotice(null);
   };
 
   const flashCopy = (message: string) => {
@@ -112,25 +131,11 @@ export function AdOperationsAssistPanel() {
   const handleCopySummary = async () => {
     if (!result) return;
 
-    const text = [
-      `현재 상태`,
-      `${result.headline} ${result.summary}`,
-      "",
-      `문제 가능 구간`,
-      ...result.causes.map((item, index) => `${index + 1}. ${item}`),
-      "",
-      `바로 할 액션`,
-      ...result.actions.map((item, index) => `${index + 1}. ${item}`),
-      "",
-      `운영 메모`,
-      result.note,
-    ].join("\n");
-
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(buildOperationSummaryCopy(result));
       flashCopy("운영 요약을 복사했습니다.");
     } catch {
-      flashCopy("복사에 실패했습니다.");
+      flashCopy("클립보드 복사에 실패했습니다.");
     }
   };
 
@@ -142,7 +147,7 @@ export function AdOperationsAssistPanel() {
     saveRecord({
       featureType: "ad-operations-assist",
       title: `광고 운영 점검 | ROAS ${formatNumber(parsedInput.roas, "%")}`,
-      summary: `${result.headline} ${result.summary}`,
+      summary: `${result.headline} 문제 구간과 바로 할 액션 메모를 저장했습니다.`,
       fields: [
         { label: "CTR", value: formatNumber(parsedInput.ctr, "%") },
         { label: "CPA", value: formatNumber(parsedInput.cpa, "원") },
@@ -158,8 +163,15 @@ export function AdOperationsAssistPanel() {
   };
 
   const applySaved = (record: (typeof records)[number]) => {
-    setForm(record.inputSnapshot as OperationForm);
-    setResult(record.outputSnapshot as AdOperationsOutput);
+    const restored = restoreAdOperationsRecord<OperationForm>(record);
+    if (!restored.ok) {
+      setRestoreNotice(restored.message);
+      return;
+    }
+
+    setForm(restored.input);
+    setResult(restored.output);
+    setRestoreNotice(null);
   };
 
   useOpenSavedItem("ad-operations-assist", applySaved);
@@ -167,7 +179,7 @@ export function AdOperationsAssistPanel() {
   return (
     <FeatureShell
       title="광고 운영 보조"
-      description="캠페인 현재 상태를 빠르게 판단하고 다음 운영 액션을 정리하는 점검 패널입니다."
+      description="캠페인 상태를 빠르게 점검하고 바로 실행할 운영 액션을 정리하는 규칙 기반 점검 도구입니다."
     >
       <ActiveFeatureLayout
         controls={
@@ -177,7 +189,7 @@ export function AdOperationsAssistPanel() {
                 <div>
                   <p className="text-sm font-medium text-[var(--text-strong)]">운영 지표 입력</p>
                   <p className="mt-1 text-xs text-[var(--text-dim)]">
-                    성과 지표와 추세를 넣으면 현재 상태, 위험 구간, 다음 액션을 규칙 기반으로 정리합니다.
+                    효율 지표와 추세를 함께 넣으면 현재 상태, 문제 가능 구간, 바로 할 액션을 정리합니다.
                   </p>
                 </div>
 
@@ -248,9 +260,12 @@ export function AdOperationsAssistPanel() {
                     disabled={!result}
                     className="inline-flex h-11 w-full items-center justify-center rounded-lg border border-[var(--line)] bg-transparent text-sm font-medium text-[var(--text-body)] transition hover:border-[var(--line-strong)] hover:text-[var(--text-strong)] disabled:opacity-40"
                   >
-                    {saveMessage ?? "현재 결과 저장"}
+                    {saveMessage ?? (result ? "현재 결과 저장" : "점검 생성 후 저장 가능")}
                   </button>
                 </div>
+                {restoreNotice ? (
+                  <p className="text-xs text-[var(--warning-text)]">{restoreNotice}</p>
+                ) : null}
               </div>
             </div>
 
@@ -259,7 +274,7 @@ export function AdOperationsAssistPanel() {
               description="저장한 운영 점검 결과를 다시 열고 삭제할 수 있습니다."
               records={records.slice(0, 5)}
               emptyTitle="저장 항목 없음"
-              emptyDescription="운영 점검 결과를 저장하면 홈 최근 저장과 이 패널에서 다시 열 수 있습니다."
+              emptyDescription="운영 점검 결과를 저장하면 최근 저장과 이 영역에서 다시 열 수 있습니다."
               onApply={applySaved}
               onRemove={removeRecord}
             />
@@ -268,8 +283,8 @@ export function AdOperationsAssistPanel() {
       >
         {!result ? (
           <EmptyState
-            title="운영 지표를 입력하세요."
-            description="현재 캠페인 상태를 판단하고 바로 실행할 운영 액션을 정리할 수 있습니다."
+            title="운영 지표를 입력해 주세요."
+            description="현재 캠페인 상태를 점검하고 바로 실행할 운영 액션을 정리할 수 있습니다."
           />
         ) : (
           <>
@@ -296,7 +311,7 @@ export function AdOperationsAssistPanel() {
 
             <ResultPanel
               title="현재 상태"
-              description="캠페인 건강도에 대한 즉시 판단입니다."
+              description="현재 캠페인 상태를 내부 공유용으로 바로 전달할 수 있는 요약입니다."
               aside={
                 <div className="flex flex-wrap items-center gap-2">
                   {copyMessage ? <span className="text-xs text-[var(--text-dim)]">{copyMessage}</span> : null}
@@ -318,21 +333,21 @@ export function AdOperationsAssistPanel() {
 
             <ResultPanel
               title="문제 가능 구간"
-              description="성과 저하 원인으로 의심되는 항목입니다."
+              description="현재 효율 저하나 운영 리스크가 발생할 가능성이 높은 구간입니다."
             >
               <ActionList items={result.causes} />
             </ResultPanel>
 
             <ResultPanel
               title="바로 할 액션"
-              description="실무자가 바로 실행할 수 있는 우선 액션입니다."
+              description="실무자가 바로 점검하거나 조정할 수 있는 우선 액션입니다."
             >
               <ActionList items={result.actions} />
             </ResultPanel>
 
             <ResultPanel
               title="운영 메모"
-              description="내부 코멘트나 데일리 운영 메모에 바로 붙일 수 있습니다."
+              description="내부 코멘트나 일일 운영 메모에 바로 붙여 넣기 쉬운 정리 문장입니다."
             >
               <div className="rounded-xl border border-[var(--line)] bg-[rgba(255,255,255,0.02)] px-4 py-4 text-sm leading-7 text-[var(--text-body)]">
                 {result.note}

@@ -10,6 +10,7 @@ import { HistoryPanel } from "@/components/history/history-panel";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useActivityHistory } from "@/hooks/use-activity-history";
 import { useOpenSavedItem } from "@/hooks/use-open-saved-item";
+import { restoreSearchAdReportRecord } from "@/lib/history/restore";
 import {
   buildSearchAdReport,
   type RuleTone,
@@ -74,18 +75,30 @@ function getToneBadge(tone: RuleTone) {
 
 function buildFullReportCopy(report: SearchAdReportOutput) {
   return [
-    `핵심 요약`,
+    `[핵심 요약]`,
     `${report.headline} ${report.summary}`,
+    ...report.keySummary.map((item) => `- ${item}`),
     "",
-    `좋은 점`,
-    ...report.strengths.map((item, index) => `${index + 1}. ${item}`),
+    `[좋은 점]`,
+    ...report.strengths.map((item) => `- ${item}`),
     "",
-    `점검 포인트`,
-    ...report.watchPoints.map((item, index) => `${index + 1}. ${item}`),
+    `[점검 포인트]`,
+    ...report.watchPoints.map((item) => `- ${item}`),
     "",
-    `권장 액션`,
-    ...report.actions.map((item, index) => `${index + 1}. ${item}`),
+    `[권장 액션]`,
+    ...report.actions.map((item) => `- ${item}`),
   ].join("\n");
+}
+
+function buildSummaryCopy(report: SearchAdReportOutput) {
+  return [
+    `${report.headline} ${report.summary}`,
+    ...report.keySummary.slice(0, 3).map((item) => `- ${item}`),
+  ].join("\n");
+}
+
+function buildActionsCopy(report: SearchAdReportOutput) {
+  return report.actions.map((item) => `- ${item}`).join("\n");
 }
 
 function ActionList({ items }: { items: string[] }) {
@@ -108,11 +121,13 @@ export function SearchAdReportAssistPanel() {
   const [report, setReport] = useState<SearchAdReportOutput | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [restoreNotice, setRestoreNotice] = useState<string | null>(null);
   const { records, saveRecord, removeRecord } = useActivityHistory("search-ad-report-assist");
   const parsedInput = useMemo(() => toInput(form), [form]);
 
   const handleGenerate = () => {
     setReport(buildSearchAdReport(parsedInput));
+    setRestoreNotice(null);
   };
 
   const flashAction = (message: string) => {
@@ -125,7 +140,7 @@ export function SearchAdReportAssistPanel() {
       await navigator.clipboard.writeText(value);
       flashAction(message);
     } catch {
-      flashAction("복사에 실패했습니다.");
+      flashAction("클립보드 복사에 실패했습니다.");
     }
   };
 
@@ -137,7 +152,7 @@ export function SearchAdReportAssistPanel() {
     saveRecord({
       featureType: "search-ad-report-assist",
       title: `검색광고 리포트 | ROAS ${formatNumber(parsedInput.roas, "%")}`,
-      summary: `${report.headline} ${report.summary}`,
+      summary: `${report.headline} 핵심 요약과 권장 액션 초안을 함께 저장했습니다.`,
       fields: [
         { label: "노출", value: formatNumber(parsedInput.impressions, "회") },
         { label: "클릭", value: formatNumber(parsedInput.clicks, "회") },
@@ -153,8 +168,15 @@ export function SearchAdReportAssistPanel() {
   };
 
   const applySaved = (record: (typeof records)[number]) => {
-    setForm(record.inputSnapshot as ReportForm);
-    setReport(record.outputSnapshot as SearchAdReportOutput);
+    const restored = restoreSearchAdReportRecord<ReportForm>(record);
+    if (!restored.ok) {
+      setRestoreNotice(restored.message);
+      return;
+    }
+
+    setForm(restored.input);
+    setReport(restored.output);
+    setRestoreNotice(null);
   };
 
   useOpenSavedItem("search-ad-report-assist", applySaved);
@@ -162,7 +184,7 @@ export function SearchAdReportAssistPanel() {
   return (
     <FeatureShell
       title="검색광고 리포트 보조"
-      description="AE와 운영 담당자가 내부 공유용, 클라이언트 공유용 초안을 빠르게 정리하는 규칙 기반 리포트 패널입니다."
+      description="AE와 운영 담당자가 내부 공유용 또는 클라이언트 초안용 리포트 문구를 빠르게 정리하는 규칙 기반 보조 도구입니다."
     >
       <ActiveFeatureLayout
         controls={
@@ -172,15 +194,15 @@ export function SearchAdReportAssistPanel() {
                 <div>
                   <p className="text-sm font-medium text-[var(--text-strong)]">성과 입력</p>
                   <p className="mt-1 text-xs text-[var(--text-dim)]">
-                    기본 성과와 전기 지표를 넣으면 비교 코멘트가 포함된 리포트 초안을 만듭니다.
+                    기본 성과와 전기 지표를 함께 넣으면 보고서 초안에 바로 쓸 수 있는 비교 코멘트까지 정리합니다.
                   </p>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   {[
-                    ["노출수", "impressions"],
-                    ["클릭수", "clicks"],
-                    ["전환수", "conversions"],
+                    ["노출", "impressions"],
+                    ["클릭", "clicks"],
+                    ["전환", "conversions"],
                     ["CPA", "cpa"],
                     ["ROAS", "roas"],
                   ].map(([label, key]) => (
@@ -204,7 +226,7 @@ export function SearchAdReportAssistPanel() {
                     <div>
                       <p className="text-sm font-medium text-[var(--text-strong)]">전기 비교</p>
                       <p className="mt-1 text-xs text-[var(--text-dim)]">
-                        입력 시 비교 코멘트가 좋은 점과 점검 포인트에 자동 반영됩니다.
+                        입력 시 유지해야 할 지표와 보완이 필요한 지표를 더 구체적으로 구분합니다.
                       </p>
                     </div>
                     <StatusBadge tone="pending">선택</StatusBadge>
@@ -246,9 +268,12 @@ export function SearchAdReportAssistPanel() {
                     disabled={!report}
                     className="inline-flex h-11 w-full items-center justify-center rounded-lg border border-[var(--line)] bg-transparent text-sm font-medium text-[var(--text-body)] transition hover:border-[var(--line-strong)] hover:text-[var(--text-strong)] disabled:opacity-40"
                   >
-                    {saveMessage ?? "현재 결과 저장"}
+                    {saveMessage ?? (report ? "현재 결과 저장" : "초안 생성 후 저장 가능")}
                   </button>
                 </div>
+                {restoreNotice ? (
+                  <p className="text-xs text-[var(--warning-text)]">{restoreNotice}</p>
+                ) : null}
               </div>
             </div>
 
@@ -257,7 +282,7 @@ export function SearchAdReportAssistPanel() {
               description="저장한 리포트 초안을 다시 열고 삭제할 수 있습니다."
               records={records.slice(0, 5)}
               emptyTitle="저장 항목 없음"
-              emptyDescription="초안을 저장하면 홈 최근 저장과 이 패널에서 다시 열 수 있습니다."
+              emptyDescription="초안을 저장하면 최근 저장과 이 영역에서 다시 열 수 있습니다."
               onApply={applySaved}
               onRemove={removeRecord}
             />
@@ -266,14 +291,14 @@ export function SearchAdReportAssistPanel() {
       >
         {!report ? (
           <EmptyState
-            title="광고 성과를 입력하세요."
-            description="성과 지표를 입력하면 내부 공유용/클라이언트 공유용 리포트 초안을 바로 정리할 수 있습니다."
+            title="광고 성과를 입력해 주세요."
+            description="성과 지표를 입력하면 내부 공유용 또는 클라이언트 공유용 리포트 초안을 바로 정리할 수 있습니다."
           />
         ) : (
           <>
             <ResultSummaryGrid>
               <div className="rounded-xl border border-[var(--line)] bg-[var(--bg-elevated)] px-4 py-4">
-                <p className="text-[11px] tracking-[0.14em] text-[var(--text-dim)]">핵심 진단</p>
+                <p className="text-[11px] tracking-[0.14em] text-[var(--text-dim)]">리포트 진단</p>
                 <p className="mt-2 text-base font-semibold text-[var(--text-strong)]">
                   {report.headline}
                 </p>
@@ -294,7 +319,7 @@ export function SearchAdReportAssistPanel() {
 
             <ResultPanel
               title="핵심 요약"
-              description="보고서 첫 문단이나 내부 공유 메시지에 바로 붙여 넣기 좋은 문장입니다."
+              description="내부 공유 메시지나 보고서 첫 문단에 바로 붙여 넣기 쉬운 요약입니다."
               aside={
                 <div className="flex flex-wrap gap-2">
                   {actionMessage ? (
@@ -309,18 +334,14 @@ export function SearchAdReportAssistPanel() {
                   </button>
                   <button
                     type="button"
-                    onClick={() =>
-                      copyText(`${report.headline} ${report.summary}`, "핵심 요약을 복사했습니다.")
-                    }
+                    onClick={() => copyText(buildSummaryCopy(report), "핵심 요약을 복사했습니다.")}
                     className="inline-flex h-8 items-center justify-center rounded-lg border border-[var(--line)] px-3 text-xs font-medium text-[var(--text-body)] transition hover:border-[var(--line-strong)] hover:text-[var(--text-strong)]"
                   >
                     핵심 요약 복사
                   </button>
                   <button
                     type="button"
-                    onClick={() =>
-                      copyText(report.actions.map((item, index) => `${index + 1}. ${item}`).join("\n"), "권장 액션을 복사했습니다.")
-                    }
+                    onClick={() => copyText(buildActionsCopy(report), "권장 액션을 복사했습니다.")}
                     className="inline-flex h-8 items-center justify-center rounded-lg border border-[var(--line)] px-3 text-xs font-medium text-[var(--text-body)] transition hover:border-[var(--line-strong)] hover:text-[var(--text-strong)]"
                   >
                     권장 액션 복사
@@ -338,22 +359,22 @@ export function SearchAdReportAssistPanel() {
 
             <ResultPanel
               title="좋은 점"
-              description="리포트에서 먼저 강조할 수 있는 강점입니다."
-              aside={<StatusBadge tone={getToneBadge(report.tone)}>보고용</StatusBadge>}
+              description="이번 구간에서 유지하거나 강조해도 되는 성과 포인트입니다."
+              aside={<StatusBadge tone={getToneBadge(report.tone)}>보고 톤</StatusBadge>}
             >
               <ActionList items={report.strengths} />
             </ResultPanel>
 
             <ResultPanel
               title="점검 포인트"
-              description="내부 코멘트나 운영 메모에 넣기 좋은 체크 항목입니다."
+              description="다음 보고나 운영 메모에서 함께 확인해야 할 보완 항목입니다."
             >
               <ActionList items={report.watchPoints} />
             </ResultPanel>
 
             <ResultPanel
               title="권장 액션"
-              description="다음 운영 액션으로 바로 연결할 수 있는 제안입니다."
+              description="실무자가 바로 이어서 점검하거나 조정할 수 있는 실행 항목입니다."
             >
               <ActionList items={report.actions} />
             </ResultPanel>

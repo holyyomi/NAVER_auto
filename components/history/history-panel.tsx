@@ -55,64 +55,70 @@ export function HistoryPanel({
           </div>
         ) : (
           <div className="space-y-3">
-            {records.map((record) => (
-              <article
-                key={record.id}
-                className="rounded-xl border border-[var(--line)] bg-[rgba(255,255,255,0.02)] px-4 py-4"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-sm font-medium text-[var(--text-strong)]">{record.title}</p>
-                      <StatusBadge tone="neutral">
-                        {getSavedFeatureMeta(record.featureType).label}
-                      </StatusBadge>
+            {records.map((record) => {
+              const feature = getSavedFeatureMeta(record.featureType);
+
+              return (
+                <article
+                  key={record.id}
+                  className="rounded-xl border border-[var(--line)] bg-[rgba(255,255,255,0.02)] px-4 py-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <StatusBadge tone="neutral">{feature.label}</StatusBadge>
+                        <span className="text-xs text-[var(--text-dim)]">
+                          최근 저장 {formatSavedAt(record.updatedAt)}
+                        </span>
+                      </div>
+                      <p className="mt-3 text-sm font-medium text-[var(--text-strong)]">{record.title}</p>
                     </div>
-                    <p className="mt-1 text-xs text-[var(--text-dim)]">{formatSavedAt(record.updatedAt)}</p>
+                    <Link
+                      href={buildSavedItemHref(record)}
+                      className="text-xs font-medium text-[var(--text-muted)] transition hover:text-[var(--text-strong)]"
+                    >
+                      페이지 열기
+                    </Link>
                   </div>
-                  <Link
-                    href={buildSavedItemHref(record)}
-                    className="text-xs font-medium text-[var(--text-muted)] transition hover:text-[var(--text-strong)]"
-                  >
-                    열기
-                  </Link>
-                </div>
 
-                <p className="mt-3 text-sm leading-6 text-[var(--text-body)]">{record.summary}</p>
+                  <p className="mt-2 text-sm leading-6 text-[var(--text-body)]">{record.summary}</p>
 
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {record.fields.map((field) => (
-                    <span
-                      key={`${record.id}-${field.label}`}
-                      className="rounded-md border border-[var(--line)] px-2 py-1 text-[11px] text-[var(--text-dim)]"
-                    >
-                      {field.label} {field.value}
-                    </span>
-                  ))}
-                </div>
-
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {onApply ? (
-                    <button
-                      type="button"
-                      onClick={() => onApply(record)}
-                      className="inline-flex h-8 items-center justify-center rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] px-3 text-xs font-medium text-[var(--text-strong)] transition hover:border-[var(--line-strong)]"
-                    >
-                      불러오기
-                    </button>
+                  {record.fields.length > 0 ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {record.fields.map((field) => (
+                        <span
+                          key={`${record.id}-${field.label}`}
+                          className="rounded-md border border-[var(--line)] px-2 py-1 text-[11px] text-[var(--text-dim)]"
+                        >
+                          {field.label}: {field.value}
+                        </span>
+                      ))}
+                    </div>
                   ) : null}
-                  {onRemove ? (
-                    <button
-                      type="button"
-                      onClick={() => onRemove(record.id)}
-                      className="inline-flex h-8 items-center justify-center rounded-lg border border-[var(--line)] bg-transparent px-3 text-xs font-medium text-[var(--text-body)] transition hover:border-[var(--line-strong)]"
-                    >
-                      삭제
-                    </button>
-                  ) : null}
-                </div>
-              </article>
-            ))}
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {onApply ? (
+                      <button
+                        type="button"
+                        onClick={() => onApply(record)}
+                        className="inline-flex h-8 items-center justify-center rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] px-3 text-xs font-medium text-[var(--text-strong)] transition hover:border-[var(--line-strong)]"
+                      >
+                        바로 불러오기
+                      </button>
+                    ) : null}
+                    {onRemove ? (
+                      <button
+                        type="button"
+                        onClick={() => onRemove(record.id)}
+                        className="inline-flex h-8 items-center justify-center rounded-lg border border-[var(--line)] bg-transparent px-3 text-xs font-medium text-[var(--text-body)] transition hover:border-[var(--line-strong)]"
+                      >
+                        삭제
+                      </button>
+                    ) : null}
+                  </div>
+                </article>
+              );
+            })}
           </div>
         )}
       </div>
