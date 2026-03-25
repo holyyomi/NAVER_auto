@@ -3,6 +3,8 @@ import { getApiErrorStatus } from "@/lib/naver/errors";
 import { getShoppingInsights } from "@/lib/naver/shopping";
 import { validateShoppingInput } from "@/lib/naver/validation";
 
+export const runtime = "nodejs";
+
 export async function POST(request: Request) {
   const body = (await request.json()) as {
     keyword?: string;

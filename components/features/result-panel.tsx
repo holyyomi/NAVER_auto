@@ -12,17 +12,18 @@ export function ResultPanel({
   children,
 }: ResultPanelProps) {
   return (
-    <div className="rounded-xl border border-[var(--line)] bg-[var(--bg-elevated)]">
-      <div className="flex items-center justify-between gap-4 border-b border-[var(--line)] px-5 py-4">
+    <div className="panel panel-result rounded-[20px]">
+      <div className="flex flex-col gap-4 border-b border-[var(--line)] px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <div>
-          <p className="text-sm font-medium text-[var(--text-strong)]">{title}</p>
+          <p className="section-label">Result</p>
+          <p className="mt-2 text-[16px] font-semibold text-[var(--text-strong)]">{title}</p>
           {description ? (
-            <p className="mt-1 text-xs text-[var(--text-dim)]">{description}</p>
+            <p className="mt-2 text-sm leading-6 text-[var(--text-body)]">{description}</p>
           ) : null}
         </div>
         {aside ? <div className="shrink-0">{aside}</div> : null}
       </div>
-      <div className="px-5 py-5">{children}</div>
+      <div className="px-5 py-5 sm:px-6 sm:py-6">{children}</div>
     </div>
   );
 }

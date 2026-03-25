@@ -1,3 +1,8 @@
+import {
+  dispatchLocalStorageEvent,
+  readLocalStorageJson,
+  writeLocalStorageJson,
+} from "@/lib/storage/local-storage";
 import type { SearchResponse } from "@/lib/naver/types";
 
 export type MonitorSearchType = "blog" | "news" | "shopping";
@@ -17,6 +22,7 @@ export type MonitorResultSummary = {
   topTitle?: string;
   topSource?: string;
   topLink?: string;
+  visibleKeys: string[];
 };
 
 export type MonitoredKeywordRecord = {
@@ -35,7 +41,7 @@ export type MonitoredKeywordRecord = {
 };
 
 export type KeywordMonitorState = {
-  version: 2;
+  version: 3;
   records: MonitoredKeywordRecord[];
 };
 
@@ -52,12 +58,12 @@ type KeywordMonitorStore = {
   }) => KeywordMonitorState;
 };
 
-const STORAGE_KEY = "naver-auto.keyword-monitor.v2";
-const LEGACY_STORAGE_KEY = "naver-auto.keyword-monitor.v1";
-const MAX_RECORDS = 30;
+const STORAGE_KEY = "naver-auto.keyword-monitor.v3";
+const STORAGE_EVENT = "naver-auto.keyword-monitor.updated";
+const MAX_RECORDS = 5;
 
 const emptyState: KeywordMonitorState = {
-  version: 2,
+  version: 3,
   records: [],
 };
 
@@ -75,6 +81,10 @@ function sortRecords(records: MonitoredKeywordRecord[]) {
   );
 }
 
+function buildVisibleKey(title?: string, source?: string) {
+  return `${(title ?? "").trim().toLowerCase()}::${(source ?? "").trim().toLowerCase()}`;
+}
+
 function sanitizeSummary(value: unknown): MonitorResultSummary | null {
   if (!value || typeof value !== "object") {
     return null;
@@ -85,37 +95,44 @@ function sanitizeSummary(value: unknown): MonitorResultSummary | null {
     return null;
   }
 
+  const visibleKeys = Array.isArray(candidate.visibleKeys)
+    ? candidate.visibleKeys.filter((item): item is string => typeof item === "string").slice(0, 10)
+    : [];
+
   return {
     total: candidate.total,
     topTitle: typeof candidate.topTitle === "string" ? candidate.topTitle : undefined,
     topSource: typeof candidate.topSource === "string" ? candidate.topSource : undefined,
     topLink: typeof candidate.topLink === "string" ? candidate.topLink : undefined,
+    visibleKeys,
   };
 }
 
-function hasTopResultChanged(
+function countPresenceChanges(
   latestSummary: MonitorResultSummary | null,
   previousSummary: MonitorResultSummary | null,
 ) {
   if (!latestSummary || !previousSummary) {
-    return false;
+    return {
+      appearedCount: 0,
+      disappearedCount: 0,
+      previousTopStillVisible: false,
+    };
   }
 
-  return (
-    latestSummary.topTitle !== previousSummary.topTitle ||
-    latestSummary.topSource !== previousSummary.topSource
-  );
-}
+  const currentSet = new Set(latestSummary.visibleKeys);
+  const previousSet = new Set(previousSummary.visibleKeys);
 
-function hasCountChanged(
-  latestSummary: MonitorResultSummary | null,
-  previousSummary: MonitorResultSummary | null,
-) {
-  if (!latestSummary || !previousSummary) {
-    return false;
-  }
+  const appearedCount = latestSummary.visibleKeys.filter((key) => !previousSet.has(key)).length;
+  const disappearedCount = previousSummary.visibleKeys.filter((key) => !currentSet.has(key)).length;
+  const previousTopStillVisible =
+    previousSummary.visibleKeys.length > 0 ? currentSet.has(previousSummary.visibleKeys[0]) : false;
 
-  return latestSummary.total !== previousSummary.total;
+  return {
+    appearedCount,
+    disappearedCount,
+    previousTopStillVisible,
+  };
 }
 
 function buildHealthStatus(
@@ -139,7 +156,12 @@ function buildHealthStatus(
     return "normal" as const;
   }
 
-  if (hasCountChanged(latestSummary, previousSummary) || hasTopResultChanged(latestSummary, previousSummary)) {
+  const { appearedCount, disappearedCount, previousTopStillVisible } = countPresenceChanges(
+    latestSummary,
+    previousSummary,
+  );
+
+  if (appearedCount > 0 || disappearedCount > 0 || !previousTopStillVisible) {
     return "changed" as const;
   }
 
@@ -153,43 +175,39 @@ function buildChangeSummary(
   message?: string | null,
 ) {
   if (status === "quota" || status === "error") {
-    return message ?? "확인 중 오류가 발생해 다시 점검이 필요합니다.";
+    return message ?? "조회 중 문제가 있어 다시 확인이 필요합니다.";
   }
 
   if (status === "empty") {
     if (previousSummary) {
-      return `이전 확인에는 ${previousSummary.total}건이 있었지만 이번에는 결과가 보이지 않습니다.`;
+      return "이전 저장본 대비 현재 노출이 줄었습니다.";
     }
 
-    return "이번 확인에서는 결과가 없어 기준 스냅샷을 만들지 못했습니다.";
+    return "현재 조회 결과가 없어 비교 기준이 아직 없습니다.";
   }
 
   if (!latestSummary) {
-    return "비교할 최신 스냅샷을 만들지 못했습니다.";
+    return "현재 비교 결과가 없습니다.";
   }
 
   if (!previousSummary) {
-    return `첫 확인 기준으로 결과 ${latestSummary.total}건을 저장했습니다. 다음 확인부터 변화 비교가 가능합니다.`;
+    return `첫 저장본입니다. 현재 노출 결과 ${latestSummary.total}건을 기준으로 저장했습니다.`;
   }
 
-  const details: string[] = [];
-  const countDiff = latestSummary.total - previousSummary.total;
+  const { appearedCount, disappearedCount, previousTopStillVisible } = countPresenceChanges(
+    latestSummary,
+    previousSummary,
+  );
 
-  if (countDiff > 0) {
-    details.push(`결과 수가 ${countDiff}건 증가했습니다.`);
-  } else if (countDiff < 0) {
-    details.push(`결과 수가 ${Math.abs(countDiff)}건 감소했습니다.`);
+  if (appearedCount === 0 && disappearedCount === 0 && previousTopStillVisible) {
+    return "이전 저장본 대비 노출 유지";
   }
 
-  if (hasTopResultChanged(latestSummary, previousSummary)) {
-    details.push("상위 노출 결과가 변경되었습니다.");
+  if (disappearedCount > appearedCount) {
+    return "이전 저장본 대비 노출 감소";
   }
 
-  if (details.length === 0) {
-    return "이전 확인 대비 큰 변화가 없습니다.";
-  }
-
-  return details.join(" ");
+  return "이전 저장본 대비 일부 결과 변화";
 }
 
 function sanitizeRecord(value: unknown): MonitoredKeywordRecord | null {
@@ -197,10 +215,7 @@ function sanitizeRecord(value: unknown): MonitoredKeywordRecord | null {
     return null;
   }
 
-  const candidate = value as Partial<MonitoredKeywordRecord> & {
-    lastCheckedAt?: string | null;
-  };
-
+  const candidate = value as Partial<MonitoredKeywordRecord>;
   if (
     typeof candidate.id !== "string" ||
     typeof candidate.keyword !== "string" ||
@@ -225,19 +240,12 @@ function sanitizeRecord(value: unknown): MonitoredKeywordRecord | null {
       ? candidate.lastStatus
       : "idle";
 
-  const latestCheckedAt =
-    typeof candidate.latestCheckedAt === "string"
-      ? candidate.latestCheckedAt
-      : typeof candidate.lastCheckedAt === "string"
-        ? candidate.lastCheckedAt
-        : null;
-
   return {
     id: candidate.id,
     keyword,
     searchType: candidate.searchType,
     createdAt: candidate.createdAt,
-    latestCheckedAt,
+    latestCheckedAt: typeof candidate.latestCheckedAt === "string" ? candidate.latestCheckedAt : null,
     previousCheckedAt:
       typeof candidate.previousCheckedAt === "string" ? candidate.previousCheckedAt : null,
     lastStatus,
@@ -255,7 +263,7 @@ function sanitizeRecord(value: unknown): MonitoredKeywordRecord | null {
       typeof candidate.changeSummary === "string"
         ? candidate.changeSummary
         : lastStatus === "idle"
-          ? "아직 확인 이력이 없습니다. 첫 확인을 실행하면 비교 기준이 생성됩니다."
+          ? "아직 저장한 비교 결과가 없습니다."
           : buildChangeSummary(
               lastStatus,
               latestSummary,
@@ -280,43 +288,26 @@ function sanitizeState(value: unknown): KeywordMonitorState {
     : [];
 
   return {
-    version: 2,
+    version: 3,
     records: sortRecords(records).slice(0, MAX_RECORDS),
   };
 }
 
 function readState() {
-  if (typeof window === "undefined") {
-    return emptyState;
-  }
-
-  try {
-    const raw =
-      window.localStorage.getItem(STORAGE_KEY) ?? window.localStorage.getItem(LEGACY_STORAGE_KEY);
-    if (!raw) {
-      return emptyState;
-    }
-
-    return sanitizeState(JSON.parse(raw));
-  } catch {
-    return emptyState;
-  }
+  return readLocalStorageJson(STORAGE_KEY, emptyState, sanitizeState);
 }
 
 function writeState(state: KeywordMonitorState) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    // localStorage may be unavailable; fail safely.
-  }
+  writeLocalStorageJson(STORAGE_KEY, state);
+  dispatchLocalStorageEvent(STORAGE_EVENT);
 }
 
 function getDuplicateKey(input: { keyword: string; searchType: MonitorSearchType }) {
-  return `${normalizeKeyword(input.keyword).toLocaleLowerCase()}::${input.searchType}`;
+  return `${normalizeKeyword(input.keyword).toLowerCase()}::${input.searchType}`;
+}
+
+export function getKeywordMonitorStorageEventName() {
+  return STORAGE_EVENT;
 }
 
 export function toMonitorSummary(data: SearchResponse): MonitorResultSummary {
@@ -326,6 +317,7 @@ export function toMonitorSummary(data: SearchResponse): MonitorResultSummary {
     topTitle: first?.title,
     topSource: first?.source,
     topLink: first?.link,
+    visibleKeys: data.items.slice(0, 10).map((item) => buildVisibleKey(item.title, item.source)),
   };
 }
 
@@ -348,7 +340,7 @@ class LocalKeywordMonitorStore implements KeywordMonitorStore {
     }
 
     const nextState: KeywordMonitorState = {
-      version: 2,
+      version: 3,
       records: sortRecords([
         {
           id: crypto.randomUUID(),
@@ -361,7 +353,7 @@ class LocalKeywordMonitorStore implements KeywordMonitorStore {
           latestSummary: null,
           previousSummary: null,
           healthStatus: "needs-review",
-          changeSummary: "아직 확인 이력이 없습니다. 첫 확인을 실행하면 비교 기준이 생성됩니다.",
+          changeSummary: "아직 저장한 비교 결과가 없습니다.",
           lastMessage: null,
         },
         ...current.records,
@@ -375,7 +367,7 @@ class LocalKeywordMonitorStore implements KeywordMonitorStore {
   remove(id: string) {
     const current = this.read();
     const nextState: KeywordMonitorState = {
-      version: 2,
+      version: 3,
       records: current.records.filter((record) => record.id !== id),
     };
 
@@ -392,7 +384,7 @@ class LocalKeywordMonitorStore implements KeywordMonitorStore {
   }) {
     const current = this.read();
     const nextState: KeywordMonitorState = {
-      version: 2,
+      version: 3,
       records: current.records.map((record) => {
         if (record.id !== input.id) {
           return record;

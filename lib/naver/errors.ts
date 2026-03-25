@@ -102,18 +102,23 @@ function isQuotaExceeded(detail?: string) {
     "daily request count exceeded",
     "usage limit exceeded",
     "rate limit exceeded",
-    "호출 시도",
-    "일일 시도",
-    "사용 한도",
+    "?몄텧 ?쒗븳",
+    "?쇱씪 ?쒗븳",
+    "?ъ슜 ?쒗븳",
   ].some((pattern) => normalized.includes(pattern));
 }
 
 export function toApiErrorResult<T>(_featureLabel: string, error: unknown): ApiResult<T> {
   if (error instanceof ServerConfigError) {
+    const modeIssue = error.issues.find((issue) => issue.includes("NAVER_API_MODE=real"));
+
     return {
       ok: false,
       code: error.code,
-      error: "네이버 API 설정이 완료되지 않았습니다.",
+      error: modeIssue
+        ? "Naver API real mode is not enabled on the server. Check NAVER_API_MODE=real."
+        : "Naver API is not configured on the server. Check NAVER_CLIENT_ID and NAVER_CLIENT_SECRET.",
+      issues: error.issues,
     };
   }
 
@@ -121,7 +126,7 @@ export function toApiErrorResult<T>(_featureLabel: string, error: unknown): ApiR
     return {
       ok: false,
       code: error.code,
-      error: "네이버 검색 응답이 지연되고 있습니다. 잠시 후 다시 시도해 주세요.",
+      error: "The Naver API response timed out. Please try again shortly.",
     };
   }
 
@@ -129,7 +134,7 @@ export function toApiErrorResult<T>(_featureLabel: string, error: unknown): ApiR
     return {
       ok: false,
       code: error.code,
-      error: "네이버 검색 응답 형식을 확인하지 못했습니다.",
+      error: "The Naver API returned a payload this app could not parse.",
     };
   }
 
@@ -138,7 +143,7 @@ export function toApiErrorResult<T>(_featureLabel: string, error: unknown): ApiR
       return {
         ok: false,
         code: error.code,
-        error: "오늘 사용 가능한 검색 호출 한도를 초과했습니다. 내일 다시 시도해 주세요.",
+        error: "The Naver API request limit has been exceeded. Please try again later.",
       };
     }
 
@@ -146,7 +151,7 @@ export function toApiErrorResult<T>(_featureLabel: string, error: unknown): ApiR
       return {
         ok: false,
         code: error.code,
-        error: "네이버 API 인증 정보를 확인해 주세요.",
+        error: "The Naver API credentials were rejected. Verify the server-side credentials.",
       };
     }
 
@@ -154,7 +159,7 @@ export function toApiErrorResult<T>(_featureLabel: string, error: unknown): ApiR
       return {
         ok: false,
         code: error.code,
-        error: "현재 계정에서 이 검색 기능을 사용할 수 없습니다.",
+        error: "The current Naver account does not have access to this API feature.",
       };
     }
 
@@ -162,7 +167,7 @@ export function toApiErrorResult<T>(_featureLabel: string, error: unknown): ApiR
       return {
         ok: false,
         code: error.code,
-        error: "쇼핑 검색 API 응답을 확인하지 못했습니다. 현재 지원 상태를 점검해 주세요.",
+        error: "The Naver Shopping search API endpoint could not be reached. Check API availability.",
       };
     }
 
@@ -170,21 +175,21 @@ export function toApiErrorResult<T>(_featureLabel: string, error: unknown): ApiR
       return {
         ok: false,
         code: error.code,
-        error: "네이버 검색 서버 응답이 불안정합니다. 잠시 후 다시 시도해 주세요.",
+        error: "The Naver API server returned an unstable response. Please try again shortly.",
       };
     }
 
     return {
       ok: false,
       code: error.code,
-      error: "네이버 검색 요청이 정상적으로 처리되지 않았습니다.",
+      error: "The Naver API request could not be completed successfully.",
     };
   }
 
   return {
     ok: false,
     code: "upstream_error",
-    error: "검색 요청 중 예상하지 못한 오류가 발생했습니다.",
+    error: "An unexpected error occurred while processing the Naver API request.",
   };
 }
 

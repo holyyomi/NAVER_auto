@@ -3,8 +3,8 @@ import { AppShell } from "@/components/layout/app-shell";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "네이버 마케팅 운영 센터",
-  description: "내부 마케팅 리서치와 운영 업무를 위한 작업 도구입니다.",
+  title: "마케팅 운영 툴",
+  description: "내부 마케팅 운영 작업을 위한 실무형 도구입니다.",
 };
 
 export default function RootLayout({
@@ -14,7 +14,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko">
-      <body>
+      <body className="min-h-screen">
         <AppShell>{children}</AppShell>
       </body>
     </html>

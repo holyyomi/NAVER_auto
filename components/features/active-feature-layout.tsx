@@ -10,8 +10,8 @@ export function ActiveFeatureLayout({
   children,
 }: ActiveFeatureLayoutProps) {
   return (
-    <section className="grid gap-6 xl:grid-cols-[340px_minmax(0,1fr)]">
-      <div className="panel rounded-2xl px-6 py-6">{controls}</div>
+    <section className="grid items-start gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
+      <div className="panel panel-input rounded-[20px] px-5 py-5 sm:px-6 sm:py-6">{controls}</div>
       <div className="space-y-6">{children}</div>
     </section>
   );

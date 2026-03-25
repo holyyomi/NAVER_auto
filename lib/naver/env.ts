@@ -1,3 +1,5 @@
+import "server-only";
+
 import type { NaverRuntimeMode } from "@/lib/naver/types";
 import { ServerConfigError } from "@/lib/naver/errors";
 
@@ -8,8 +10,8 @@ export function getNaverEnv() {
 
   return {
     mode,
-    clientId: process.env.NAVER_CLIENT_ID ?? "",
-    clientSecret: process.env.NAVER_CLIENT_SECRET ?? "",
+    clientId: readEnv("NAVER_CLIENT_ID"),
+    clientSecret: readEnv("NAVER_CLIENT_SECRET"),
     appName: process.env.NEXT_PUBLIC_APP_NAME ?? "NAVER Marketing Operator",
     timeoutMs,
     retryCount,
@@ -74,4 +76,8 @@ function parseInteger(
   if (Number.isNaN(parsed)) return fallback;
 
   return Math.min(max, Math.max(min, parsed));
+}
+
+function readEnv(name: "NAVER_CLIENT_ID" | "NAVER_CLIENT_SECRET") {
+  return process.env[name]?.trim() ?? "";
 }

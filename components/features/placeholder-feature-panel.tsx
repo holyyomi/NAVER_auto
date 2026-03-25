@@ -16,22 +16,18 @@ export function PlaceholderFeaturePanel({ feature }: PlaceholderFeaturePanelProp
         <SectionHeading
           eyebrow={statusMeta.sectionLabel}
           title={feature.title}
-          description="아직 실제 작업에 사용할 수 없는 준비 단계 기능입니다."
+          description="현재 운영 범위에 포함되지 않은 기능입니다."
           aside={<StatusBadge tone={statusMeta.tone}>{statusMeta.label}</StatusBadge>}
         />
 
         <div className="mt-6 flex flex-wrap items-center gap-3">
           <div className="rounded-xl border border-[var(--line)] bg-[var(--bg-elevated)] px-4 py-3">
             <p className="text-xs text-[var(--text-dim)]">상태</p>
-            <p className="mt-1 text-sm font-medium text-[var(--text-strong)]">
-              {statusMeta.label}
-            </p>
+            <p className="mt-1 text-sm font-medium text-[var(--text-strong)]">{statusMeta.label}</p>
           </div>
           <div className="rounded-xl border border-[var(--line)] bg-[var(--bg-elevated)] px-4 py-3">
             <p className="text-xs text-[var(--text-dim)]">분류</p>
-            <p className="mt-1 text-sm font-medium text-[var(--text-strong)]">
-              {feature.group}
-            </p>
+            <p className="mt-1 text-sm font-medium text-[var(--text-strong)]">{feature.group}</p>
           </div>
         </div>
       </section>
@@ -39,11 +35,9 @@ export function PlaceholderFeaturePanel({ feature }: PlaceholderFeaturePanelProp
       <section className="panel rounded-2xl px-6 py-6">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <p className="text-sm font-medium text-[var(--text-strong)]">
-              준비 중인 기능입니다.
-            </p>
+            <p className="text-sm font-medium text-[var(--text-strong)]">현재 사용 가능한 기능으로 이동해 주세요.</p>
             <p className="mt-2 text-sm text-[var(--text-body)]">
-              홈으로 돌아가 다른 작업을 먼저 진행해 주세요.
+              이 기능은 이번 MVP 범위에 포함되지 않습니다. 홈에서 현재 사용 가능한 작업으로 이동할 수 있습니다.
             </p>
           </div>
           <Link

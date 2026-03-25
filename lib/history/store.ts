@@ -1,3 +1,4 @@
+import { trimRecentRecords } from "@/lib/history/recent-records";
 import {
   getSavedFeatureMeta,
   type SaveItemInput,
@@ -5,16 +6,19 @@ import {
   type SavedItemRecord,
   type SaveStore,
 } from "@/lib/history/types";
+import {
+  dispatchLocalStorageEvent,
+  readLocalStorageJson,
+  writeLocalStorageJson,
+} from "@/lib/storage/local-storage";
 
-const STORAGE_KEY = "naver-auto.saved-items.v1";
+const STORAGE_KEY = "naver-auto.saved-items.v2";
+const LEGACY_STORAGE_KEY = "naver-auto.saved-items.v1";
 const STORAGE_EVENT = "naver-auto:saved-items-updated";
-const MAX_RECORDS = 50;
 
 function isSavedFeatureType(value: unknown): value is SavedFeatureType {
   return (
-    value === "keyword-trends" ||
     value === "search-results" ||
-    value === "shopping-insights" ||
     value === "local-business-research" ||
     value === "search-ad-report-assist" ||
     value === "ad-operations-assist"
@@ -55,12 +59,6 @@ function sanitizeFields(value: unknown) {
   });
 }
 
-function sortRecords(records: SavedItemRecord[]) {
-  return [...records].sort(
-    (left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime(),
-  );
-}
-
 function normalizeRecord(record: SavedItemRecord): SavedItemRecord {
   const featureMeta = getSavedFeatureMeta(record.featureType);
 
@@ -72,15 +70,29 @@ function normalizeRecord(record: SavedItemRecord): SavedItemRecord {
   };
 }
 
+function sanitizeLegacyFeatureType(value: unknown): SavedFeatureType | null {
+  if (value === "search-results") return "search-results";
+  if (value === "local-business-research") return "local-business-research";
+  if (value === "search-ad-report-assist") return "search-ad-report-assist";
+  if (value === "ad-operations-assist") return "ad-operations-assist";
+  return null;
+}
+
 function sanitizeRecord(value: unknown): SavedItemRecord | null {
   if (!value || typeof value !== "object") {
     return null;
   }
 
-  const candidate = value as Partial<SavedItemRecord>;
+  const candidate = value as Partial<SavedItemRecord> & {
+    featureType?: unknown;
+  };
+  const featureType = isSavedFeatureType(candidate.featureType)
+    ? candidate.featureType
+    : sanitizeLegacyFeatureType(candidate.featureType);
+
   if (
     typeof candidate.id !== "string" ||
-    !isSavedFeatureType(candidate.featureType) ||
+    !featureType ||
     typeof candidate.title !== "string" ||
     typeof candidate.summary !== "string" ||
     !isValidDateString(candidate.createdAt) ||
@@ -91,7 +103,7 @@ function sanitizeRecord(value: unknown): SavedItemRecord | null {
 
   return normalizeRecord({
     id: candidate.id,
-    featureType: candidate.featureType,
+    featureType,
     title: candidate.title,
     summary: candidate.summary,
     inputSnapshot: candidate.inputSnapshot ?? null,
@@ -102,52 +114,36 @@ function sanitizeRecord(value: unknown): SavedItemRecord | null {
   });
 }
 
-function readRecords(): SavedItemRecord[] {
-  if (typeof window === "undefined") {
+function readRawRecords(): SavedItemRecord[] {
+  const current = readLocalStorageJson<unknown[]>(STORAGE_KEY, []);
+  if (Array.isArray(current) && current.length > 0) {
+    return current.flatMap((item) => {
+      const sanitized = sanitizeRecord(item);
+      return sanitized ? [sanitized] : [];
+    });
+  }
+
+  const legacy = readLocalStorageJson<unknown[]>(LEGACY_STORAGE_KEY, []);
+  if (!Array.isArray(legacy)) {
     return [];
   }
 
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return [];
-    }
-
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-
-    return sortRecords(
-      parsed.flatMap((item) => {
-        const sanitized = sanitizeRecord(item);
-        return sanitized ? [sanitized] : [];
-      }),
-    );
-  } catch {
-    return [];
-  }
+  return legacy.flatMap((item) => {
+    const sanitized = sanitizeRecord(item);
+    return sanitized ? [sanitized] : [];
+  });
 }
 
-function dispatchRecordsChanged() {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.dispatchEvent(new CustomEvent(STORAGE_EVENT));
+function readRecords(): SavedItemRecord[] {
+  return trimRecentRecords(readRawRecords()).map(normalizeRecord);
 }
 
 function writeRecords(records: SavedItemRecord[]) {
-  if (typeof window === "undefined") {
-    return;
-  }
+  const normalized = trimRecentRecords(records).map(normalizeRecord);
+  const didWrite = writeLocalStorageJson(STORAGE_KEY, normalized);
 
-  try {
-    const normalized = sortRecords(records).slice(0, MAX_RECORDS).map(normalizeRecord);
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
-    dispatchRecordsChanged();
-  } catch {
-    // localStorage may be unavailable; fail safely.
+  if (didWrite) {
+    dispatchLocalStorageEvent(STORAGE_EVENT);
   }
 }
 

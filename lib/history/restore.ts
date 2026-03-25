@@ -53,16 +53,16 @@ export function restoreSearchResultsRecord<TInput extends { keyword: string; sea
   record: SavedItemRecord,
 ): RestoreResult<TInput, ApiResult<SearchResponse>> {
   if (!isRecord(record.inputSnapshot)) {
-    return { ok: false, message: "저장된 검색 조건을 복원할 수 없습니다." };
+    return { ok: false, message: "저장한 검색 조건을 불러올 수 없습니다." };
   }
 
   const input = record.inputSnapshot as Record<string, unknown>;
   if (!isString(input.keyword) || !isSearchType(input.searchType)) {
-    return { ok: false, message: "저장된 검색 조건 형식이 올바르지 않습니다." };
+    return { ok: false, message: "저장한 검색 조건 형식이 올바르지 않습니다." };
   }
 
   if (!isApiResultSearchResponse(record.outputSnapshot)) {
-    return { ok: false, message: "저장된 검색 결과를 다시 불러올 수 없습니다." };
+    return { ok: false, message: "저장한 검색 결과를 불러올 수 없습니다." };
   }
 
   return {
@@ -76,60 +76,25 @@ export function restoreSearchResultsRecord<TInput extends { keyword: string; sea
   };
 }
 
-export function restoreLocalBusinessRecord<
-  TInput extends {
-    region: string;
-    businessKeyword: string;
-    businessName: string;
-    searchType: SearchType;
-  },
->(record: SavedItemRecord): RestoreResult<TInput, ApiResult<SearchResponse>> {
-  if (!isRecord(record.inputSnapshot)) {
-    return { ok: false, message: "저장된 지역 조사 조건을 복원할 수 없습니다." };
-  }
-
-  const input = record.inputSnapshot as Record<string, unknown>;
-  if (
-    !isString(input.region) ||
-    !isString(input.businessKeyword) ||
-    !isString(input.businessName) ||
-    !isSearchType(input.searchType)
-  ) {
-    return { ok: false, message: "저장된 지역 조사 조건 형식이 올바르지 않습니다." };
-  }
-
-  if (!isApiResultSearchResponse(record.outputSnapshot)) {
-    return { ok: false, message: "저장된 지역 조사 결과를 다시 불러올 수 없습니다." };
-  }
-
-  return {
-    ok: true,
-    input: record.inputSnapshot as TInput,
-    output: record.outputSnapshot,
-  };
-}
-
 export function restoreSearchAdReportRecord<TInput>(
   record: SavedItemRecord,
 ): RestoreResult<TInput, SearchAdReportOutput> {
   if (!isRecord(record.inputSnapshot)) {
-    return { ok: false, message: "저장된 리포트 입력값을 복원할 수 없습니다." };
+    return { ok: false, message: "저장한 리포트 입력값을 불러올 수 없습니다." };
   }
 
   if (!isRecord(record.outputSnapshot)) {
-    return { ok: false, message: "저장된 리포트 초안을 복원할 수 없습니다." };
+    return { ok: false, message: "저장한 리포트 결과를 불러올 수 없습니다." };
   }
 
   const output = record.outputSnapshot as Record<string, unknown>;
   if (
-    !isString(output.headline) ||
-    !isString(output.summary) ||
-    !isStringArray(output.keySummary) ||
+    !isString(output.oneLineSummary) ||
     !isStringArray(output.strengths) ||
-    !isStringArray(output.watchPoints) ||
-    !isStringArray(output.actions)
+    !isStringArray(output.issues) ||
+    !isStringArray(output.nextActions)
   ) {
-    return { ok: false, message: "저장된 리포트 초안 형식이 올바르지 않습니다." };
+    return { ok: false, message: "저장한 리포트 결과 형식이 올바르지 않습니다." };
   }
 
   return {
@@ -139,26 +104,58 @@ export function restoreSearchAdReportRecord<TInput>(
   };
 }
 
+export function restoreLocalBusinessRecord<
+  TInput extends {
+    region: string;
+    businessKeyword: string;
+    businessName: string;
+    searchType: SearchType;
+  },
+>(record: SavedItemRecord): RestoreResult<TInput, ApiResult<SearchResponse>> {
+  if (!isRecord(record.inputSnapshot)) {
+    return { ok: false, message: "저장한 조사 조건을 불러올 수 없습니다." };
+  }
+
+  const input = record.inputSnapshot as Record<string, unknown>;
+  if (
+    !isString(input.region) ||
+    !isString(input.businessKeyword) ||
+    !isString(input.businessName) ||
+    !isSearchType(input.searchType)
+  ) {
+    return { ok: false, message: "저장한 조사 조건 형식이 올바르지 않습니다." };
+  }
+
+  if (!isApiResultSearchResponse(record.outputSnapshot)) {
+    return { ok: false, message: "저장한 조사 결과를 불러올 수 없습니다." };
+  }
+
+  return {
+    ok: true,
+    input: record.inputSnapshot as TInput,
+    output: record.outputSnapshot,
+  };
+}
+
 export function restoreAdOperationsRecord<TInput>(
   record: SavedItemRecord,
 ): RestoreResult<TInput, AdOperationsOutput> {
   if (!isRecord(record.inputSnapshot)) {
-    return { ok: false, message: "저장된 운영 점검 입력값을 복원할 수 없습니다." };
+    return { ok: false, message: "저장한 운영 입력값을 불러올 수 없습니다." };
   }
 
   if (!isRecord(record.outputSnapshot)) {
-    return { ok: false, message: "저장된 운영 점검 결과를 복원할 수 없습니다." };
+    return { ok: false, message: "저장한 운영 결과를 불러올 수 없습니다." };
   }
 
   const output = record.outputSnapshot as Record<string, unknown>;
   if (
-    !isString(output.headline) ||
-    !isString(output.summary) ||
-    !isString(output.note) ||
-    !isStringArray(output.causes) ||
-    !isStringArray(output.actions)
+    !isString(output.problemSummary) ||
+    !isStringArray(output.causeHypotheses) ||
+    !isStringArray(output.todayActions) ||
+    !isStringArray(output.tomorrowMetrics)
   ) {
-    return { ok: false, message: "저장된 운영 점검 결과 형식이 올바르지 않습니다." };
+    return { ok: false, message: "저장한 운영 결과 형식이 올바르지 않습니다." };
   }
 
   return {

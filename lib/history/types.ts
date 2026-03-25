@@ -1,7 +1,5 @@
 export type SavedFeatureType =
-  | "keyword-trends"
   | "search-results"
-  | "shopping-insights"
   | "local-business-research"
   | "search-ad-report-assist"
   | "ad-operations-assist";
@@ -43,17 +41,9 @@ export const savedFeatureMeta: Record<
     href: string;
   }
 > = {
-  "keyword-trends": {
-    label: "키워드 트렌드",
-    href: "/features/keyword-trends",
-  },
   "search-results": {
     label: "검색 결과 모음",
     href: "/features/search-results-hub",
-  },
-  "shopping-insights": {
-    label: "쇼핑 인사이트",
-    href: "/features/shopping-insights",
   },
   "local-business-research": {
     label: "지역 업체 조사",

@@ -3,6 +3,8 @@ import { getApiErrorStatus } from "@/lib/naver/errors";
 import { getTrendAnalysis } from "@/lib/naver/trend";
 import { validateTrendInput } from "@/lib/naver/validation";
 
+export const runtime = "nodejs";
+
 export async function POST(request: Request) {
   const body = (await request.json()) as {
     keyword?: string;

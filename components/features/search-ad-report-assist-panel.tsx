@@ -1,115 +1,148 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { ActiveFeatureLayout } from "@/components/features/active-feature-layout";
+import { EmptyState } from "@/components/features/shared-states";
 import { FeatureShell } from "@/components/features/feature-shell";
 import { ResultPanel } from "@/components/features/result-panel";
-import { ResultSummaryGrid } from "@/components/features/result-summary-grid";
-import { EmptyState } from "@/components/features/shared-states";
-import { HistoryPanel } from "@/components/history/history-panel";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { FeatureUsageGuide } from "@/components/guidance/feature-usage-guide";
+import { HistoryPanel } from "@/components/history/history-panel";
+import { CopyButton } from "@/components/ui/copy-button";
+import { SampleDataButton } from "@/components/ui/sample-data-button";
 import { useActivityHistory } from "@/hooks/use-activity-history";
 import { useOpenSavedItem } from "@/hooks/use-open-saved-item";
 import { featureUsageGuides } from "@/lib/guidance";
 import { restoreSearchAdReportRecord } from "@/lib/history/restore";
 import {
   buildSearchAdReport,
-  type RuleTone,
+  type ReportTemplate,
   type SearchAdReportInput,
   type SearchAdReportOutput,
 } from "@/lib/reporting/search-ad-report-rules";
 
 type ReportForm = {
+  template: ReportTemplate;
+  mediaPlatform: string;
+  campaignName: string;
+  period: string;
   impressions: string;
   clicks: string;
+  cost: string;
   conversions: string;
+  revenue: string;
+  ctr: string;
+  cpc: string;
   cpa: string;
   roas: string;
-  previousCtr: string;
-  previousCvr: string;
-  previousCpa: string;
-  previousRoas: string;
+  comparisonNotes: string;
 };
 
-const initialForm: ReportForm = {
+const sampleInternal: ReportForm = {
+  template: "internal",
+  mediaPlatform: "네이버 검색광고",
+  campaignName: "병원 브랜드 캠페인",
+  period: "2026-03-01 ~ 2026-03-07",
   impressions: "120000",
-  clicks: "3600",
-  conversions: "128",
-  cpa: "28000",
-  roas: "430",
-  previousCtr: "2.6",
-  previousCvr: "3.0",
-  previousCpa: "32000",
-  previousRoas: "380",
+  clicks: "3650",
+  cost: "3560000",
+  conversions: "112",
+  revenue: "15400000",
+  ctr: "",
+  cpc: "",
+  cpa: "",
+  roas: "",
+  comparisonNotes: "직전 주 대비 CTR이 소폭 상승했고 전환은 유지됐습니다.",
 };
+
+const sampleClient: ReportForm = {
+  ...sampleInternal,
+  template: "client",
+  campaignName: "진료 키워드 캠페인",
+  comparisonNotes: "직전 기간 대비 주요 수치는 안정적으로 유지됐습니다.",
+};
+
+const initialForm = sampleInternal;
+
+type AiResponse<T> =
+  | { ok: true; data: T }
+  | { ok: false; error: string };
 
 function parseNumber(value: string) {
   const parsed = Number(value.trim().replace(/,/g, ""));
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function deriveRatio(numerator: number | null, denominator: number | null, multiplier = 1) {
+  if (numerator === null || denominator === null || denominator === 0) {
+    return null;
+  }
+
+  return Number(((numerator / denominator) * multiplier).toFixed(2));
+}
+
 function toInput(form: ReportForm): SearchAdReportInput {
+  const impressions = parseNumber(form.impressions);
+  const clicks = parseNumber(form.clicks);
+  const cost = parseNumber(form.cost);
+  const conversions = parseNumber(form.conversions);
+  const revenue = parseNumber(form.revenue);
+
+  const ctr = parseNumber(form.ctr) ?? deriveRatio(clicks, impressions, 100);
+  const cpc = parseNumber(form.cpc) ?? deriveRatio(cost, clicks);
+  const cpa = parseNumber(form.cpa) ?? deriveRatio(cost, conversions);
+  const roas = parseNumber(form.roas) ?? deriveRatio(revenue, cost, 100);
+
   return {
-    impressions: parseNumber(form.impressions),
-    clicks: parseNumber(form.clicks),
-    ctr: null,
-    conversions: parseNumber(form.conversions),
-    cvr: null,
-    cpa: parseNumber(form.cpa),
-    roas: parseNumber(form.roas),
-    previousCtr: parseNumber(form.previousCtr),
-    previousCvr: parseNumber(form.previousCvr),
-    previousCpa: parseNumber(form.previousCpa),
-    previousRoas: parseNumber(form.previousRoas),
+    template: form.template,
+    mediaPlatform: form.mediaPlatform.trim(),
+    campaignName: form.campaignName.trim(),
+    period: form.period.trim(),
+    impressions,
+    clicks,
+    ctr,
+    cost,
+    cpc,
+    conversions,
+    cpa,
+    revenue,
+    roas,
+    comparisonNotes: form.comparisonNotes.trim(),
   };
 }
 
-function formatNumber(value: number | null, suffix = "") {
-  return value === null ? "-" : `${value.toLocaleString("ko-KR")}${suffix}`;
+function isReportInputValid(input: SearchAdReportInput) {
+  if (!input.mediaPlatform || !input.campaignName || !input.period) {
+    return false;
+  }
+
+  return [input.impressions, input.clicks, input.cost, input.conversions, input.revenue].some(
+    (value) => value !== null,
+  );
 }
 
-function getToneBadge(tone: RuleTone) {
-  if (tone === "positive") return "active" as const;
-  if (tone === "warning") return "attention" as const;
-  return "neutral" as const;
-}
-
-function buildFullReportCopy(report: SearchAdReportOutput) {
+function buildCopyText(report: SearchAdReportOutput) {
   return [
-    `[핵심 요약]`,
-    `${report.headline} ${report.summary}`,
-    ...report.keySummary.map((item) => `- ${item}`),
+    "[한 줄 요약]",
+    report.oneLineSummary,
     "",
-    `[좋은 점]`,
+    "[잘된 점]",
     ...report.strengths.map((item) => `- ${item}`),
     "",
-    `[점검 포인트]`,
-    ...report.watchPoints.map((item) => `- ${item}`),
+    "[문제점]",
+    ...report.issues.map((item) => `- ${item}`),
     "",
-    `[권장 액션]`,
-    ...report.actions.map((item) => `- ${item}`),
+    "[다음 액션]",
+    ...report.nextActions.map((item) => `- ${item}`),
   ].join("\n");
 }
 
-function buildSummaryCopy(report: SearchAdReportOutput) {
-  return [
-    `${report.headline} ${report.summary}`,
-    ...report.keySummary.slice(0, 3).map((item) => `- ${item}`),
-  ].join("\n");
-}
-
-function buildActionsCopy(report: SearchAdReportOutput) {
-  return report.actions.map((item) => `- ${item}`).join("\n");
-}
-
-function ActionList({ items }: { items: string[] }) {
+function OutputList({ items }: { items: string[] }) {
   return (
     <div className="space-y-3">
       {items.map((item, index) => (
         <div
           key={`${item}-${index}`}
-          className="rounded-xl border border-[var(--line)] bg-[rgba(255,255,255,0.02)] px-4 py-3 text-sm leading-6 text-[var(--text-body)]"
+          className="rounded-xl border border-[var(--line)] bg-[var(--bg-muted)] px-4 py-3 text-sm leading-6 text-[var(--text-body)]"
         >
           {item}
         </div>
@@ -121,52 +154,76 @@ function ActionList({ items }: { items: string[] }) {
 export function SearchAdReportAssistPanel() {
   const [form, setForm] = useState<ReportForm>(initialForm);
   const [report, setReport] = useState<SearchAdReportOutput | null>(null);
-  const [saveMessage, setSaveMessage] = useState<string | null>(null);
-  const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
   const [restoreNotice, setRestoreNotice] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
   const { records, saveRecord, removeRecord } = useActivityHistory("search-ad-report-assist");
+  const usageGuide = featureUsageGuides["search-ad-report-assist"];
   const parsedInput = useMemo(() => toInput(form), [form]);
 
-  const handleGenerate = () => {
-    setReport(buildSearchAdReport(parsedInput));
-    setRestoreNotice(null);
+  const flash = (text: string) => {
+    setMessage(text);
+    window.setTimeout(() => setMessage(null), 1800);
   };
 
-  const flashAction = (message: string) => {
-    setActionMessage(message);
-    window.setTimeout(() => setActionMessage(null), 1600);
-  };
-
-  const copyText = async (value: string, message: string) => {
-    try {
-      await navigator.clipboard.writeText(value);
-      flashAction(message);
-    } catch {
-      flashAction("클립보드 복사에 실패했습니다.");
+  const generate = () => {
+    if (!isReportInputValid(parsedInput)) {
+      flash("매체명, 캠페인명, 기간과 기본 수치를 입력해 주세요.");
+      return;
     }
+
+    startTransition(async () => {
+      try {
+        const response = await fetch("/api/ai/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            kind: "report",
+            payload: parsedInput,
+          }),
+        });
+
+        const data = (await response.json()) as AiResponse<SearchAdReportOutput>;
+        if (data.ok) {
+          setReport({
+            template: form.template,
+            ...data.data,
+          });
+          setRestoreNotice(null);
+          flash("보고서 초안을 만들었습니다.");
+          return;
+        }
+
+        setReport(buildSearchAdReport(parsedInput));
+        setRestoreNotice(null);
+        flash(`${data.error} 기본 결과로 대신 만들었습니다.`);
+      } catch {
+        setReport(buildSearchAdReport(parsedInput));
+        setRestoreNotice(null);
+        flash("AI 응답 없이 기본 결과로 만들었습니다.");
+      }
+    });
   };
 
-  const handleSave = () => {
+  const saveCurrent = () => {
     if (!report) {
       return;
     }
 
     saveRecord({
       featureType: "search-ad-report-assist",
-      title: `검색광고 리포트 | ROAS ${formatNumber(parsedInput.roas, "%")}`,
-      summary: `${report.headline} 핵심 요약과 권장 액션 초안을 함께 저장했습니다.`,
+      title: `${form.campaignName || "캠페인"} | ${form.period || "기간 미입력"}`,
+      summary: report.oneLineSummary,
       fields: [
-        { label: "노출", value: formatNumber(parsedInput.impressions, "회") },
-        { label: "클릭", value: formatNumber(parsedInput.clicks, "회") },
-        { label: "전환", value: formatNumber(parsedInput.conversions, "건") },
-        { label: "ROAS", value: formatNumber(parsedInput.roas, "%") },
+        { label: "매체", value: form.mediaPlatform || "-" },
+        { label: "템플릿", value: form.template === "internal" ? "내부 공유용" : "클라이언트용" },
+        { label: "ROAS", value: parsedInput.roas !== null ? `${parsedInput.roas}%` : "-" },
       ],
       inputSnapshot: form,
       outputSnapshot: report,
     });
 
-    setSaveMessage("저장 완료");
-    window.setTimeout(() => setSaveMessage(null), 1600);
+    flash("보고서를 저장했습니다.");
   };
 
   const applySaved = (record: (typeof records)[number]) => {
@@ -183,98 +240,96 @@ export function SearchAdReportAssistPanel() {
 
   useOpenSavedItem("search-ad-report-assist", applySaved);
 
-  const usageGuide = featureUsageGuides["search-ad-report-assist"];
-
   return (
     <FeatureShell
       title="검색광고 리포트 보조"
-      description="AE와 운영 담당자가 내부 공유용 또는 클라이언트 초안용 리포트 문구를 빠르게 정리하는 규칙 기반 보조 도구입니다."
+      description="광고 수치를 입력하면 공유용 보고 문안을 정리합니다."
     >
       <ActiveFeatureLayout
         controls={
           <div className="space-y-6">
-            <div className="rounded-xl border border-[var(--line)] bg-[rgba(255,255,255,0.02)] px-4 py-4">
+            <div className="rounded-xl border border-[var(--line)] bg-[var(--bg-elevated)] px-4 py-4">
               <div className="space-y-4">
-                <div>
-                  <p className="text-sm font-medium text-[var(--text-strong)]">성과 입력</p>
-                  <p className="mt-1 text-xs text-[var(--text-dim)]">
-                    기본 성과와 전기 지표를 함께 넣으면 보고서 초안에 바로 쓸 수 있는 비교 코멘트까지 정리합니다.
-                  </p>
-                </div>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-[var(--text-body)]">템플릿</span>
+                  <select
+                    value={form.template}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        template: event.target.value as ReportTemplate,
+                      }))
+                    }
+                    className="w-full rounded-lg border border-[var(--line)] bg-[var(--bg-muted)] px-3 py-2.5 text-sm text-[var(--text-strong)] outline-none transition focus:border-[var(--line-strong)]"
+                  >
+                    <option value="internal">내부 공유용</option>
+                    <option value="client">클라이언트용</option>
+                  </select>
+                </label>
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   {[
+                    ["매체명", "mediaPlatform"],
+                    ["캠페인명", "campaignName"],
+                    ["기간", "period"],
                     ["노출", "impressions"],
                     ["클릭", "clicks"],
+                    ["비용", "cost"],
                     ["전환", "conversions"],
+                    ["매출", "revenue"],
+                    ["CTR", "ctr"],
+                    ["CPC", "cpc"],
                     ["CPA", "cpa"],
                     ["ROAS", "roas"],
                   ].map(([label, key]) => (
                     <label key={key} className="block">
-                      <span className="mb-2 block text-sm font-medium text-[var(--text-body)]">
-                        {label}
-                      </span>
+                      <span className="mb-2 block text-sm font-medium text-[var(--text-body)]">{label}</span>
                       <input
                         value={form[key as keyof ReportForm]}
                         onChange={(event) =>
-                          setForm((current) => ({ ...current, [key]: event.target.value }))
+                          setForm((current) => ({
+                            ...current,
+                            [key]: event.target.value,
+                          }))
                         }
-                        className="w-full rounded-lg border border-[var(--line)] bg-[var(--bg-elevated)] px-3 py-2.5 text-sm text-[var(--text-strong)] outline-none transition focus:border-[var(--line-strong)]"
+                        className="w-full rounded-lg border border-[var(--line)] bg-[var(--bg-muted)] px-3 py-2.5 text-sm text-[var(--text-strong)] outline-none transition focus:border-[var(--line-strong)]"
                       />
                     </label>
                   ))}
                 </div>
 
-                <div className="rounded-xl border border-[var(--line)] bg-[var(--bg-elevated)] px-4 py-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-medium text-[var(--text-strong)]">전기 비교</p>
-                      <p className="mt-1 text-xs text-[var(--text-dim)]">
-                        입력 시 유지해야 할 지표와 보완이 필요한 지표를 더 구체적으로 구분합니다.
-                      </p>
-                    </div>
-                    <StatusBadge tone="pending">선택</StatusBadge>
-                  </div>
-                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                    {[
-                      ["이전 CTR", "previousCtr"],
-                      ["이전 CVR", "previousCvr"],
-                      ["이전 CPA", "previousCpa"],
-                      ["이전 ROAS", "previousRoas"],
-                    ].map(([label, key]) => (
-                      <label key={key} className="block">
-                        <span className="mb-2 block text-sm font-medium text-[var(--text-body)]">
-                          {label}
-                        </span>
-                        <input
-                          value={form[key as keyof ReportForm]}
-                          onChange={(event) =>
-                            setForm((current) => ({ ...current, [key]: event.target.value }))
-                          }
-                          className="w-full rounded-lg border border-[var(--line)] bg-[var(--bg-elevated)] px-3 py-2.5 text-sm text-[var(--text-strong)] outline-none transition focus:border-[var(--line-strong)]"
-                        />
-                      </label>
-                    ))}
-                  </div>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-[var(--text-body)]">비교 메모</span>
+                  <textarea
+                    value={form.comparisonNotes}
+                    onChange={(event) =>
+                      setForm((current) => ({ ...current, comparisonNotes: event.target.value }))
+                    }
+                    rows={3}
+                    className="w-full rounded-lg border border-[var(--line)] bg-[var(--bg-muted)] px-3 py-2.5 text-sm text-[var(--text-strong)] outline-none transition focus:border-[var(--line-strong)]"
+                    placeholder="직전 기간 대비 변화나 참고 메모를 적어 주세요."
+                  />
+                </label>
+
+                <div className="flex flex-wrap gap-2">
+                  <SampleDataButton
+                    onClick={() => setForm(form.template === "client" ? sampleClient : sampleInternal)}
+                  />
                 </div>
 
                 <div className="grid gap-2">
-                  <button
-                    type="button"
-                    onClick={handleGenerate}
-                    className="inline-flex h-11 w-full items-center justify-center rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] text-sm font-medium text-[var(--text-strong)] transition hover:border-[var(--line-strong)]"
-                  >
-                    리포트 초안 생성
+                  <button type="button" onClick={generate} disabled={isPending} className="button-primary w-full">
+                    {isPending ? "생성 중.." : "보고서 만들기"}
                   </button>
-                  <button
-                    type="button"
-                    onClick={handleSave}
-                    disabled={!report}
-                    className="inline-flex h-11 w-full items-center justify-center rounded-lg border border-[var(--line)] bg-transparent text-sm font-medium text-[var(--text-body)] transition hover:border-[var(--line-strong)] hover:text-[var(--text-strong)] disabled:opacity-40"
-                  >
-                    {saveMessage ?? (report ? "현재 결과 저장" : "초안 생성 후 저장 가능")}
+                  <button type="button" onClick={saveCurrent} disabled={!report} className="button-secondary w-full">
+                    결과 저장
                   </button>
                 </div>
+
+                <p className="text-xs text-[var(--text-dim)]">
+                  입력 후 보고서를 만들고 복사하거나 저장합니다. 비어 있는 비율 지표는 가능한 경우 자동 계산합니다.
+                </p>
+                {message ? <p className="text-xs text-[var(--text-dim)]">{message}</p> : null}
                 {restoreNotice ? (
                   <p className="text-xs text-[var(--warning-text)]">{restoreNotice}</p>
                 ) : null}
@@ -282,11 +337,11 @@ export function SearchAdReportAssistPanel() {
             </div>
 
             <HistoryPanel
-              title="다시 보기"
-              description="저장한 리포트 초안을 다시 열고 삭제할 수 있습니다."
+              title="최근 5개"
+              description="저장한 보고서를 다시 엽니다."
               records={records.slice(0, 5)}
-              emptyTitle="저장 항목 없음"
-              emptyDescription="초안을 저장하면 최근 저장과 이 영역에서 다시 열 수 있습니다."
+              emptyTitle="저장한 보고서가 없습니다"
+              emptyDescription="보고서를 저장하면 최근 목록에 표시됩니다."
               onApply={applySaved}
               onRemove={removeRecord}
             />
@@ -299,94 +354,46 @@ export function SearchAdReportAssistPanel() {
           nextAction={usageGuide.nextAction}
           testPoint={usageGuide.testPoint}
         />
+
         {!report ? (
           <EmptyState
-            title="광고 성과를 입력해 주세요."
-            description="성과 지표를 입력하면 내부 공유용 또는 클라이언트 공유용 리포트 초안을 바로 정리할 수 있습니다."
+            title="광고 수치를 입력해 주세요"
+            description="보고서 만들기 버튼을 누르면 결과가 표시됩니다."
           />
         ) : (
           <>
-            <ResultSummaryGrid>
-              <div className="rounded-xl border border-[var(--line)] bg-[var(--bg-elevated)] px-4 py-4">
-                <p className="text-[11px] tracking-[0.14em] text-[var(--text-dim)]">리포트 진단</p>
-                <p className="mt-2 text-base font-semibold text-[var(--text-strong)]">
-                  {report.headline}
-                </p>
-              </div>
-              <div className="rounded-xl border border-[var(--line)] bg-[var(--bg-elevated)] px-4 py-4">
-                <p className="text-[11px] tracking-[0.14em] text-[var(--text-dim)]">CTR / CVR</p>
-                <p className="mt-2 text-base font-semibold text-[var(--text-strong)]">
-                  {formatNumber(report.derived.ctr, "%")} / {formatNumber(report.derived.cvr, "%")}
-                </p>
-              </div>
-              <div className="rounded-xl border border-[var(--line)] bg-[var(--bg-elevated)] px-4 py-4">
-                <p className="text-[11px] tracking-[0.14em] text-[var(--text-dim)]">추정 광고비</p>
-                <p className="mt-2 text-base font-semibold text-[var(--text-strong)]">
-                  {formatNumber(report.derived.estimatedSpend, "원")}
-                </p>
-              </div>
-            </ResultSummaryGrid>
-
             <ResultPanel
-              title="핵심 요약"
-              description="내부 공유 메시지나 보고서 첫 문단에 바로 붙여 넣기 쉬운 요약입니다."
+              title="한 줄 요약"
+              description="공유용 첫 문장으로 바로 사용할 수 있습니다."
               aside={
-                <div className="flex flex-wrap gap-2">
-                  {actionMessage ? (
-                    <span className="self-center text-xs text-[var(--text-dim)]">{actionMessage}</span>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={() => copyText(buildFullReportCopy(report), "전체 내용을 복사했습니다.")}
-                    className="inline-flex h-8 items-center justify-center rounded-lg border border-[var(--line)] px-3 text-xs font-medium text-[var(--text-body)] transition hover:border-[var(--line-strong)] hover:text-[var(--text-strong)]"
-                  >
-                    전체 복사
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => copyText(buildSummaryCopy(report), "핵심 요약을 복사했습니다.")}
-                    className="inline-flex h-8 items-center justify-center rounded-lg border border-[var(--line)] px-3 text-xs font-medium text-[var(--text-body)] transition hover:border-[var(--line-strong)] hover:text-[var(--text-strong)]"
-                  >
-                    핵심 요약 복사
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => copyText(buildActionsCopy(report), "권장 액션을 복사했습니다.")}
-                    className="inline-flex h-8 items-center justify-center rounded-lg border border-[var(--line)] px-3 text-xs font-medium text-[var(--text-body)] transition hover:border-[var(--line-strong)] hover:text-[var(--text-strong)]"
-                  >
-                    권장 액션 복사
-                  </button>
-                </div>
+                <CopyButton
+                  label="전체 복사"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(buildCopyText(report));
+                      flash("보고서 내용을 복사했습니다.");
+                    } catch {
+                      flash("복사에 실패했습니다.");
+                    }
+                  }}
+                />
               }
             >
-              <div className="space-y-3">
-                <div className="rounded-xl border border-[var(--line)] bg-[rgba(255,255,255,0.02)] px-4 py-4 text-sm leading-7 text-[var(--text-body)]">
-                  {report.headline} {report.summary}
-                </div>
-                <ActionList items={report.keySummary} />
+              <div className="rounded-xl border border-[var(--line)] bg-[var(--bg-muted)] px-4 py-4 text-sm leading-7 text-[var(--text-body)]">
+                {report.oneLineSummary}
               </div>
             </ResultPanel>
 
-            <ResultPanel
-              title="좋은 점"
-              description="이번 구간에서 유지하거나 강조해도 되는 성과 포인트입니다."
-              aside={<StatusBadge tone={getToneBadge(report.tone)}>보고 톤</StatusBadge>}
-            >
-              <ActionList items={report.strengths} />
+            <ResultPanel title="잘된 점">
+              <OutputList items={report.strengths} />
             </ResultPanel>
 
-            <ResultPanel
-              title="점검 포인트"
-              description="다음 보고나 운영 메모에서 함께 확인해야 할 보완 항목입니다."
-            >
-              <ActionList items={report.watchPoints} />
+            <ResultPanel title="문제점">
+              <OutputList items={report.issues} />
             </ResultPanel>
 
-            <ResultPanel
-              title="권장 액션"
-              description="실무자가 바로 이어서 점검하거나 조정할 수 있는 실행 항목입니다."
-            >
-              <ActionList items={report.actions} />
+            <ResultPanel title="다음 액션">
+              <OutputList items={report.nextActions} />
             </ResultPanel>
           </>
         )}
