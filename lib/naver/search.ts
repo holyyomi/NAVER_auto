@@ -1,14 +1,15 @@
-import { fetchNaverJson } from "@/lib/naver/client";
+﻿import { fetchNaverJson } from "@/lib/naver/client";
 import { isDemoMode, assertRealModeNaverConfig, getNaverEnv } from "@/lib/naver/env";
 import { logServerError, toApiErrorResult } from "@/lib/naver/errors";
 import { createMockSearchData } from "@/lib/naver/mock";
 import type { ApiResult, SearchResponse } from "@/lib/naver/types";
+import { normalizePublishedDate, sanitizeText } from "@/lib/naver/utils";
 import {
   type NaverSearchRawItem,
   type NaverSearchRawResponse,
   validateSearchPayload,
 } from "@/lib/naver/validation";
-import { normalizePublishedDate, sanitizeText } from "@/lib/naver/utils";
+import { sanitizeDisplayText, sanitizeOptionalDisplayText } from "@/lib/text/display-text";
 
 type SearchType = "blog" | "news" | "shopping";
 
@@ -21,8 +22,14 @@ function getSearchApiPath(searchType: SearchType) {
 }
 
 function normalizeSource(inputType: SearchType, item: NaverSearchRawItem) {
-  if (inputType === "blog") return sanitizeText(item.bloggername ?? "블로그");
-  if (inputType === "shopping") return sanitizeText(item.mallName ?? "쇼핑");
+  if (inputType === "blog") {
+    return sanitizeDisplayText(sanitizeText(item.bloggername ?? ""), "블로그");
+  }
+
+  if (inputType === "shopping") {
+    return sanitizeDisplayText(sanitizeText(item.mallName ?? ""), "쇼핑");
+  }
+
   return "뉴스";
 }
 
@@ -31,14 +38,14 @@ function normalizeSearchResponse(
   raw: NaverSearchRawResponse,
 ): SearchResponse {
   return {
-    keyword: input.keyword,
+    keyword: sanitizeDisplayText(input.keyword, "검색어"),
     searchType: input.searchType,
     total: raw.total,
     items: raw.items.map((item) => ({
-      title: sanitizeText(item.title),
+      title: sanitizeDisplayText(sanitizeText(item.title)),
       link: item.link || item.originallink || "#",
-      description: sanitizeText(item.description),
-      source: normalizeSource(input.searchType, item),
+      description: sanitizeDisplayText(sanitizeText(item.description)),
+      source: sanitizeOptionalDisplayText(normalizeSource(input.searchType, item)),
       type: input.searchType,
       publishedAt: input.searchType === "shopping" ? undefined : normalizePublishedDate(item.pubDate),
     })),

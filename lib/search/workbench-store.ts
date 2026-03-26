@@ -1,4 +1,8 @@
 import type { NaverRuntimeMode, SearchItem, SearchResponse } from "@/lib/naver/types";
+import {
+  sanitizeDisplayText,
+  sanitizeOptionalDisplayText,
+} from "@/lib/text/display-text";
 
 export type SearchType = "blog" | "news" | "shopping";
 
@@ -79,7 +83,7 @@ function normalizeKeyword(value: string) {
 }
 
 function normalizeCondition(input: SearchCondition): SearchCondition | null {
-  const keyword = normalizeKeyword(input.keyword);
+  const keyword = sanitizeDisplayText(normalizeKeyword(input.keyword), "");
   if (!keyword || !isSearchType(input.searchType)) {
     return null;
   }
@@ -198,12 +202,12 @@ function sanitizeSearchItem(value: unknown): SearchItem | null {
   }
 
   return {
-    title: candidate.title,
+    title: sanitizeDisplayText(candidate.title),
     link: candidate.link,
-    description: candidate.description,
+    description: sanitizeDisplayText(candidate.description),
     type: candidate.type,
-    source: typeof candidate.source === "string" ? candidate.source : undefined,
-    publishedAt: typeof candidate.publishedAt === "string" ? candidate.publishedAt : undefined,
+    source: sanitizeOptionalDisplayText(candidate.source),
+    publishedAt: sanitizeOptionalDisplayText(candidate.publishedAt),
   };
 }
 
@@ -222,7 +226,7 @@ function sanitizeSnapshot(value: unknown): SavedResultSnapshot | null {
     return null;
   }
 
-  const keyword = normalizeKeyword(candidate.keyword);
+  const keyword = sanitizeDisplayText(normalizeKeyword(candidate.keyword), "");
   if (!keyword) {
     return null;
   }

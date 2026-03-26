@@ -6,15 +6,7 @@ import {
 import type { SearchResponse } from "@/lib/naver/types";
 
 export type MonitorSearchType = "blog" | "news" | "shopping";
-
-export type MonitorCheckStatus =
-  | "idle"
-  | "loading"
-  | "success"
-  | "empty"
-  | "quota"
-  | "error";
-
+export type MonitorCheckStatus = "idle" | "loading" | "success" | "empty" | "quota" | "error";
 export type MonitorHealthStatus = "normal" | "changed" | "needs-review";
 
 export type MonitorResultSummary = {
@@ -61,11 +53,7 @@ type KeywordMonitorStore = {
 const STORAGE_KEY = "naver-auto.keyword-monitor.v3";
 const STORAGE_EVENT = "naver-auto.keyword-monitor.updated";
 const MAX_RECORDS = 5;
-
-const emptyState: KeywordMonitorState = {
-  version: 3,
-  records: [],
-};
+const emptyState: KeywordMonitorState = { version: 3, records: [] };
 
 function normalizeKeyword(value: string) {
   return value.trim().replace(/\s+/g, " ");
@@ -86,14 +74,9 @@ function buildVisibleKey(title?: string, source?: string) {
 }
 
 function sanitizeSummary(value: unknown): MonitorResultSummary | null {
-  if (!value || typeof value !== "object") {
-    return null;
-  }
-
+  if (!value || typeof value !== "object") return null;
   const candidate = value as Partial<MonitorResultSummary>;
-  if (typeof candidate.total !== "number") {
-    return null;
-  }
+  if (typeof candidate.total !== "number") return null;
 
   const visibleKeys = Array.isArray(candidate.visibleKeys)
     ? candidate.visibleKeys.filter((item): item is string => typeof item === "string").slice(0, 10)
@@ -108,31 +91,19 @@ function sanitizeSummary(value: unknown): MonitorResultSummary | null {
   };
 }
 
-function countPresenceChanges(
-  latestSummary: MonitorResultSummary | null,
-  previousSummary: MonitorResultSummary | null,
-) {
+function countPresenceChanges(latestSummary: MonitorResultSummary | null, previousSummary: MonitorResultSummary | null) {
   if (!latestSummary || !previousSummary) {
-    return {
-      appearedCount: 0,
-      disappearedCount: 0,
-      previousTopStillVisible: false,
-    };
+    return { appearedCount: 0, disappearedCount: 0, previousTopStillVisible: false };
   }
 
   const currentSet = new Set(latestSummary.visibleKeys);
   const previousSet = new Set(previousSummary.visibleKeys);
-
   const appearedCount = latestSummary.visibleKeys.filter((key) => !previousSet.has(key)).length;
   const disappearedCount = previousSummary.visibleKeys.filter((key) => !currentSet.has(key)).length;
   const previousTopStillVisible =
     previousSummary.visibleKeys.length > 0 ? currentSet.has(previousSummary.visibleKeys[0]) : false;
 
-  return {
-    appearedCount,
-    disappearedCount,
-    previousTopStillVisible,
-  };
+  return { appearedCount, disappearedCount, previousTopStillVisible };
 }
 
 function buildHealthStatus(
@@ -140,21 +111,10 @@ function buildHealthStatus(
   latestSummary: MonitorResultSummary | null,
   previousSummary: MonitorResultSummary | null,
 ) {
-  if (status === "quota" || status === "error") {
-    return "needs-review" as const;
-  }
-
-  if (status === "empty") {
-    return previousSummary ? ("changed" as const) : ("needs-review" as const);
-  }
-
-  if (!latestSummary) {
-    return "needs-review" as const;
-  }
-
-  if (!previousSummary) {
-    return "normal" as const;
-  }
+  if (status === "quota" || status === "error") return "needs-review" as const;
+  if (status === "empty") return previousSummary ? ("changed" as const) : ("needs-review" as const);
+  if (!latestSummary) return "needs-review" as const;
+  if (!previousSummary) return "normal" as const;
 
   const { appearedCount, disappearedCount, previousTopStillVisible } = countPresenceChanges(
     latestSummary,
@@ -174,25 +134,10 @@ function buildChangeSummary(
   previousSummary: MonitorResultSummary | null,
   message?: string | null,
 ) {
-  if (status === "quota" || status === "error") {
-    return message ?? "조회 중 문제가 있어 다시 확인이 필요합니다.";
-  }
-
-  if (status === "empty") {
-    if (previousSummary) {
-      return "이전 저장본 대비 현재 노출이 줄었습니다.";
-    }
-
-    return "현재 조회 결과가 없어 비교 기준이 아직 없습니다.";
-  }
-
-  if (!latestSummary) {
-    return "현재 비교 결과가 없습니다.";
-  }
-
-  if (!previousSummary) {
-    return `첫 저장본입니다. 현재 노출 결과 ${latestSummary.total}건을 기준으로 저장했습니다.`;
-  }
+  if (status === "quota" || status === "error") return message ?? "조회 중 문제가 있어 다시 확인이 필요합니다.";
+  if (status === "empty") return previousSummary ? "이전 저장본 대비 현재 노출이 줄었습니다." : "현재 조회 결과가 없어 비교 기준이 아직 없습니다.";
+  if (!latestSummary) return "현재 비교 결과가 없습니다.";
+  if (!previousSummary) return `첫 저장본입니다. 현재 노출 결과 ${latestSummary.total}건을 기준으로 저장했습니다.`;
 
   const { appearedCount, disappearedCount, previousTopStillVisible } = countPresenceChanges(
     latestSummary,
@@ -203,32 +148,22 @@ function buildChangeSummary(
     return "이전 저장본 대비 노출 유지";
   }
 
-  if (disappearedCount > appearedCount) {
-    return "이전 저장본 대비 노출 감소";
-  }
-
+  if (disappearedCount > appearedCount) return "이전 저장본 대비 노출 감소";
   return "이전 저장본 대비 일부 결과 변화";
 }
 
 function sanitizeRecord(value: unknown): MonitoredKeywordRecord | null {
-  if (!value || typeof value !== "object") {
-    return null;
-  }
-
+  if (!value || typeof value !== "object") return null;
   const candidate = value as Partial<MonitoredKeywordRecord>;
   if (
     typeof candidate.id !== "string" ||
     typeof candidate.keyword !== "string" ||
     !isSearchType(candidate.searchType) ||
     typeof candidate.createdAt !== "string"
-  ) {
-    return null;
-  }
+  ) return null;
 
   const keyword = normalizeKeyword(candidate.keyword);
-  if (!keyword) {
-    return null;
-  }
+  if (!keyword) return null;
 
   const latestSummary = sanitizeSummary(candidate.latestSummary);
   const previousSummary = sanitizeSummary(candidate.previousSummary);
@@ -246,8 +181,7 @@ function sanitizeRecord(value: unknown): MonitoredKeywordRecord | null {
     searchType: candidate.searchType,
     createdAt: candidate.createdAt,
     latestCheckedAt: typeof candidate.latestCheckedAt === "string" ? candidate.latestCheckedAt : null,
-    previousCheckedAt:
-      typeof candidate.previousCheckedAt === "string" ? candidate.previousCheckedAt : null,
+    previousCheckedAt: typeof candidate.previousCheckedAt === "string" ? candidate.previousCheckedAt : null,
     lastStatus,
     latestSummary,
     previousSummary,
@@ -275,10 +209,7 @@ function sanitizeRecord(value: unknown): MonitoredKeywordRecord | null {
 }
 
 function sanitizeState(value: unknown): KeywordMonitorState {
-  if (!value || typeof value !== "object") {
-    return emptyState;
-  }
-
+  if (!value || typeof value !== "object") return emptyState;
   const candidate = value as Partial<KeywordMonitorState>;
   const records = Array.isArray(candidate.records)
     ? candidate.records.flatMap((item) => {
@@ -287,10 +218,7 @@ function sanitizeState(value: unknown): KeywordMonitorState {
       })
     : [];
 
-  return {
-    version: 3,
-    records: sortRecords(records).slice(0, MAX_RECORDS),
-  };
+  return { version: 3, records: sortRecords(records).slice(0, MAX_RECORDS) };
 }
 
 function readState() {
@@ -328,16 +256,12 @@ class LocalKeywordMonitorStore implements KeywordMonitorStore {
 
   add(input: { keyword: string; searchType: MonitorSearchType }) {
     const keyword = normalizeKeyword(input.keyword);
-    if (!keyword) {
-      return this.read();
-    }
+    if (!keyword) return this.read();
 
     const current = this.read();
     const duplicateKey = getDuplicateKey({ keyword, searchType: input.searchType });
     const exists = current.records.some((record) => getDuplicateKey(record) === duplicateKey);
-    if (exists) {
-      return current;
-    }
+    if (exists) return current;
 
     const nextState: KeywordMonitorState = {
       version: 3,
@@ -386,9 +310,7 @@ class LocalKeywordMonitorStore implements KeywordMonitorStore {
     const nextState: KeywordMonitorState = {
       version: 3,
       records: current.records.map((record) => {
-        if (record.id !== input.id) {
-          return record;
-        }
+        if (record.id !== input.id) return record;
 
         const latestSummary = input.summary;
         const previousSummary = record.latestSummary;

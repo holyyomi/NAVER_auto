@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -11,7 +11,7 @@ type AppShellProps = {
 
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
-  const appName = process.env.NEXT_PUBLIC_APP_NAME || "NAVER Auto";
+  const appName = process.env.NEXT_PUBLIC_APP_NAME || "Marketing Dashboard";
   const isHome = pathname === "/";
   const currentFeature = getFeatureByHref(pathname);
 
@@ -24,30 +24,25 @@ export function AppShell({ children }: AppShellProps) {
             style={{ background: "var(--sidebar-bg)" }}
           >
             <div className="border-b border-white/20 px-2 pb-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/70">
-                NAVER
-              </p>
-              <p className="mt-2 text-[22px] font-bold tracking-[-0.03em] text-white">
-                {appName}
-              </p>
+              <p className="text-[24px] font-bold tracking-[-0.03em] text-white">{appName}</p>
               <p className="mt-2 text-sm leading-6 text-white/78">
-                검색과 마케팅 운영 흐름을 한 화면에서 관리합니다.
+                검색, 리포트, 운영, 조사 작업을 한 흐름으로 연결해 관리하는 마케팅 워크스페이스입니다.
               </p>
             </div>
 
             <nav className="space-y-6 overflow-y-auto pt-5">
               <div className="space-y-2">
                 <p className="px-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/65">
-                  Dashboard
+                  Overview
                 </p>
                 <Link href="/" className={navItemClass(pathname === "/")}>
-                  홈
+                  대시보드 홈
                 </Link>
               </div>
 
               <div className="space-y-2">
                 <p className="px-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/65">
-                  Workflows
+                  Workflow Library
                 </p>
                 <div className="space-y-1.5">
                   {visibleFeatures.map((feature) => (
@@ -64,9 +59,9 @@ export function AppShell({ children }: AppShellProps) {
             </nav>
 
             <div className="mt-auto rounded-2xl border border-white/18 bg-white/10 px-4 py-4 backdrop-blur-sm">
-              <p className="text-sm font-semibold text-white">오늘 포커스</p>
+              <p className="text-sm font-semibold text-white">오늘의 포인트</p>
               <p className="mt-2 text-sm leading-6 text-white/78">
-                조회 결과를 저장하고 다음 액션으로 이어지는 흐름을 빠르게 정리하세요.
+                결과를 저장하고 다음 작업으로 이어서 정리하면 반복 업무를 더 빠르게 처리할 수 있습니다.
               </p>
             </div>
           </div>
@@ -74,17 +69,16 @@ export function AppShell({ children }: AppShellProps) {
 
         <div className="page-surface flex min-h-screen min-w-0 flex-1 flex-col self-stretch rounded-[28px] border px-4 py-4 sm:px-5 sm:py-5">
           {!isHome ? (
-            <header className="surface-card overflow-hidden px-5 py-5 sm:px-6">
+            <header className="surface-card app-header overflow-hidden px-5 py-5 sm:px-6">
               <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
                 <div>
                   <div className="flex flex-wrap items-center gap-3">
                     <div className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--accent-soft)] text-[18px] font-bold text-[var(--accent)]">
-                      N
+                      M
                     </div>
                     <div>
-                      <p className="section-label">Feature Workspace</p>
-                      <h1 className="mt-2 text-[24px] font-bold tracking-[-0.035em] text-[var(--text-strong)]">
-                        {currentFeature?.title ?? "작업"}
+                      <h1 className="text-[26px] font-bold tracking-[-0.04em] text-[var(--text-strong)]">
+                        {currentFeature?.title ?? "워크스페이스"}
                       </h1>
                     </div>
                     {currentFeature ? (
@@ -93,15 +87,15 @@ export function AppShell({ children }: AppShellProps) {
                       </StatusBadge>
                     ) : null}
                   </div>
-                  <p className="mt-4 max-w-3xl text-sm leading-6 text-[var(--text-body)]">
-                    {currentFeature?.description ?? "선택한 작업 화면입니다."}
+                  <p className="mt-4 max-w-3xl text-[15px] leading-7 text-[var(--text-body)]">
+                    {currentFeature?.description ?? "선택한 작업을 실행하고 결과를 정리하는 화면입니다."}
                   </p>
                 </div>
               </div>
 
               <div className="mt-5 flex gap-2 overflow-x-auto pb-1 lg:hidden">
                 <Link href="/" className={mobileTabClass(pathname === "/")}>
-                  홈
+                  대시보드 홈
                 </Link>
                 {visibleFeatures.map((feature) => (
                   <Link
@@ -119,7 +113,7 @@ export function AppShell({ children }: AppShellProps) {
               <div className="surface-card px-4 py-4 sm:px-5">
                 <div className="flex gap-2 overflow-x-auto pb-1">
                   <Link href="/" className={mobileTabClass(pathname === "/")}>
-                    홈
+                    대시보드 홈
                   </Link>
                   {visibleFeatures.map((feature) => (
                     <Link

@@ -5,7 +5,7 @@ type SampleDataButtonProps = {
 };
 
 export function SampleDataButton({
-  label = "샘플 입력",
+  label = "샘플",
   onClick,
   disabled = false,
 }: SampleDataButtonProps) {
@@ -14,7 +14,7 @@ export function SampleDataButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="button-secondary inline-flex min-h-9 items-center justify-center px-3 py-2 text-xs disabled:opacity-40"
+      className="button-secondary inline-flex min-h-9 items-center justify-center rounded-xl px-3 py-2 text-xs font-semibold disabled:opacity-40"
     >
       {label}
     </button>

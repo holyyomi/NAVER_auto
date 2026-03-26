@@ -78,7 +78,7 @@ function validateOperationsPayload(payload: OperationsPayload) {
     payload.landingIssue;
 
   if (!hasIssue && !payload.notes.trim()) {
-    return "최소 한 개 이상의 이슈를 선택하거나 메모를 입력해 주세요.";
+    return "최소 한 개 이상의 운영 이슈를 선택하거나 메모를 입력해 주세요.";
   }
 
   return null;
@@ -87,15 +87,14 @@ function validateOperationsPayload(payload: OperationsPayload) {
 function getPrompt(kind: "report" | "operations", payload: ReportPayload | OperationsPayload) {
   if (kind === "report") {
     return `
-당신은 내부 마케팅 운영 도구의 검색광고 리포트 작성 보조입니다.
-반드시 JSON 객체만 반환하세요.
-설명 문장, 코드블록, 인사말 없이 JSON만 반환하세요.
+당신은 실무형 마케팅 운영 도구의 검색광고 리포트 작성 보조입니다.
+반드시 JSON 객체만 반환해 주세요.
+설명 문장, 코드 블록, 인사말 없이 JSON만 반환해 주세요.
 
 작성 원칙:
-- 한국어로 짧고 실무적으로 작성
-- 과장 금지
-- 내부 공유용 또는 클라이언트용 템플릿 차이만 반영
-- AI 비서 같은 말투 금지
+- 짧고 명확한 실무형 문장
+- 과장 표현 금지
+- 내부 공유용과 클라이언트용 톤 차이 반영
 - 각 배열은 1~4개 항목
 
 JSON 스키마:
@@ -112,15 +111,14 @@ ${JSON.stringify(payload, null, 2)}
   }
 
   return `
-당신은 내부 마케팅 운영 도구의 광고 운영 보조입니다.
-반드시 JSON 객체만 반환하세요.
-설명 문장, 코드블록, 인사말 없이 JSON만 반환하세요.
+당신은 실무형 마케팅 운영 도구의 광고 운영 보조입니다.
+반드시 JSON 객체만 반환해 주세요.
+설명 문장, 코드 블록, 인사말 없이 JSON만 반환해 주세요.
 
 작성 원칙:
-- 한국어로 짧고 실무적으로 작성
-- 오늘 바로 쓸 수 있는 운영 메모처럼 작성
-- 과장 금지
-- AI 비서 같은 말투 금지
+- 짧고 명확한 실무형 문장
+- 오늘 바로 확인할 운영 메모 형태
+- 과장 표현 금지
 - 각 배열은 1~4개 항목
 
 JSON 스키마:
@@ -143,13 +141,7 @@ export async function POST(request: Request) {
   };
 
   if (!body.kind || !body.payload) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "AI 요청 형식이 올바르지 않습니다.",
-      },
-      { status: 400 },
-    );
+    return NextResponse.json({ ok: false, error: "AI 요청 형식이 올바르지 않습니다." }, { status: 400 });
   }
 
   const validationError =
@@ -158,13 +150,7 @@ export async function POST(request: Request) {
       : validateOperationsPayload(body.payload as OperationsPayload);
 
   if (validationError) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: validationError,
-      },
-      { status: 400 },
-    );
+    return NextResponse.json({ ok: false, error: validationError }, { status: 400 });
   }
 
   const apiKey = process.env.OPENROUTER_API_KEY;
@@ -172,10 +158,7 @@ export async function POST(request: Request) {
 
   if (!apiKey) {
     return NextResponse.json(
-      {
-        ok: false,
-        error: "OPENROUTER_API_KEY가 설정되어 있지 않습니다.",
-      },
+      { ok: false, error: "OPENROUTER_API_KEY가 설정되어 있지 않습니다." },
       { status: 503 },
     );
   }
@@ -189,25 +172,14 @@ export async function POST(request: Request) {
       },
       body: JSON.stringify({
         model,
-        messages: [
-          {
-            role: "user",
-            content: getPrompt(body.kind, body.payload),
-          },
-        ],
+        messages: [{ role: "user", content: getPrompt(body.kind, body.payload) }],
         temperature: 0.3,
       }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      return NextResponse.json(
-        {
-          ok: false,
-          error: `OpenRouter 응답 오류: ${errorText}`,
-        },
-        { status: 502 },
-      );
+      return NextResponse.json({ ok: false, error: `OpenRouter 응답 오류: ${errorText}` }, { status: 502 });
     }
 
     const result = (await response.json()) as {
@@ -220,38 +192,16 @@ export async function POST(request: Request) {
 
     const content = result.choices?.[0]?.message?.content;
     if (!content) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "AI 응답이 비어 있습니다.",
-        },
-        { status: 502 },
-      );
+      return NextResponse.json({ ok: false, error: "AI 응답이 비어 있습니다." }, { status: 502 });
     }
 
     try {
-      return NextResponse.json({
-        ok: true,
-        data: extractJson(content),
-      });
+      return NextResponse.json({ ok: true, data: extractJson(content) });
     } catch {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "AI 응답을 JSON으로 해석하지 못했습니다.",
-        },
-        { status: 502 },
-      );
+      return NextResponse.json({ ok: false, error: "AI 응답을 JSON으로 해석하지 못했습니다." }, { status: 502 });
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "AI 요청 중 오류가 발생했습니다.";
-
-    return NextResponse.json(
-      {
-        ok: false,
-        error: message,
-      },
-      { status: 500 },
-    );
+    return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
 }

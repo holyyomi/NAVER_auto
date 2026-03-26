@@ -135,6 +135,18 @@ body {
   box-shadow: var(--shadow-panel-hover);
 }
 
+.dashboard-hero {
+  background:
+    radial-gradient(circle at top left, rgba(3, 199, 90, 0.09), transparent 32%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 1));
+}
+
+.app-header {
+  background:
+    linear-gradient(180deg, rgba(3, 199, 90, 0.035), rgba(255, 255, 255, 0) 58%),
+    var(--bg-elevated);
+}
+
 .surface-card {
   border-radius: 12px;
   border: 1px solid var(--line);

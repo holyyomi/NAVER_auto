@@ -3,8 +3,8 @@ import { AppShell } from "@/components/layout/app-shell";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "마케팅 운영 툴",
-  description: "내부 마케팅 운영 작업을 위한 실무형 도구입니다.",
+  title: "Marketing Dashboard",
+  description: "Professional marketing operations dashboard for search, reporting, and workflow management.",
 };
 
 export default function RootLayout({

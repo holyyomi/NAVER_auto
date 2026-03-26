@@ -51,3 +51,69 @@ export function buildSearchResultsHref(input: {
     autoRun: input.autoRun ? "1" : undefined,
   });
 }
+
+export function buildSearchAdReportAssistHref(input: {
+  template?: "internal" | "client";
+  mediaPlatform?: string;
+  campaignName?: string;
+  period?: string;
+  impressions?: string;
+  clicks?: string;
+  cost?: string;
+  conversions?: string;
+  revenue?: string;
+  ctr?: string;
+  cpc?: string;
+  cpa?: string;
+  roas?: string;
+  comparisonNotes?: string;
+  autoRun?: boolean;
+}) {
+  return buildHref("/features/search-ad-report-assist", {
+    template: input.template,
+    mediaPlatform: input.mediaPlatform,
+    campaignName: input.campaignName,
+    period: input.period,
+    impressions: input.impressions,
+    clicks: input.clicks,
+    cost: input.cost,
+    conversions: input.conversions,
+    revenue: input.revenue,
+    ctr: input.ctr,
+    cpc: input.cpc,
+    cpa: input.cpa,
+    roas: input.roas,
+    comparisonNotes: input.comparisonNotes,
+    autoRun: input.autoRun ? "1" : undefined,
+  });
+}
+
+export function buildAdOperationsAssistHref(input: {
+  mediaPlatform?: string;
+  campaignName?: string;
+  period?: string;
+  ctrDrop?: boolean;
+  cpcIncrease?: boolean;
+  conversionDrop?: boolean;
+  lowImpressions?: boolean;
+  creativeFatigue?: boolean;
+  budgetIssue?: boolean;
+  landingIssue?: boolean;
+  notes?: string;
+  autoRun?: boolean;
+}) {
+  return buildHref("/features/ad-operations-assist", {
+    mediaPlatform: input.mediaPlatform,
+    campaignName: input.campaignName,
+    period: input.period,
+    ctrDrop: input.ctrDrop ? "1" : undefined,
+    cpcIncrease: input.cpcIncrease ? "1" : undefined,
+    conversionDrop: input.conversionDrop ? "1" : undefined,
+    lowImpressions: input.lowImpressions ? "1" : undefined,
+    creativeFatigue: input.creativeFatigue ? "1" : undefined,
+    budgetIssue: input.budgetIssue ? "1" : undefined,
+    landingIssue: input.landingIssue ? "1" : undefined,
+    notes: input.notes,
+    autoRun: input.autoRun ? "1" : undefined,
+  });
+}

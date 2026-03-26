@@ -12,7 +12,7 @@ export function getNaverEnv() {
     mode,
     clientId: readEnv("NAVER_CLIENT_ID"),
     clientSecret: readEnv("NAVER_CLIENT_SECRET"),
-    appName: process.env.NEXT_PUBLIC_APP_NAME ?? "NAVER Marketing Operator",
+    appName: process.env.NEXT_PUBLIC_APP_NAME ?? "Marketing Dashboard",
     timeoutMs,
     retryCount,
   };

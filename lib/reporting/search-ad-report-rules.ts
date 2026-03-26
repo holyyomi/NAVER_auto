@@ -26,33 +26,29 @@ export type SearchAdReportOutput = {
 };
 
 function formatNumber(value: number | null, suffix = "") {
-  if (value === null || Number.isNaN(value)) {
-    return "-";
-  }
-
+  if (value === null || Number.isNaN(value)) return "-";
   return `${value.toLocaleString("ko-KR")}${suffix}`;
 }
 
 function pushIfMissing(target: string[], value: string) {
-  if (!target.includes(value)) {
-    target.push(value);
-  }
+  if (!target.includes(value)) target.push(value);
 }
 
 function buildToneSummary(input: SearchAdReportInput) {
   const roas = input.roas ?? 0;
   const ctr = input.ctr ?? 0;
   const conversions = input.conversions ?? 0;
+  const campaignName = input.campaignName || "캠페인";
 
   if (roas >= 400 && conversions >= 10) {
-    return `${input.campaignName || "캠페인"}은(는) 성과가 안정적으로 유지되고 있습니다.`;
+    return `${campaignName}은 성과가 안정적으로 유지되고 있습니다.`;
   }
 
   if (roas < 250 || conversions < 3 || ctr < 1.5) {
-    return `${input.campaignName || "캠페인"}은(는) 주요 지표 보완이 필요한 상태입니다.`;
+    return `${campaignName}은 주요 지표 보완이 필요한 상태입니다.`;
   }
 
-  return `${input.campaignName || "캠페인"}은(는) 큰 문제는 없지만 추가 최적화 여지가 있습니다.`;
+  return `${campaignName}은 큰 문제는 없지만 추가 최적화 여지가 있습니다.`;
 }
 
 export function buildSearchAdReport(input: SearchAdReportInput): SearchAdReportOutput {
@@ -78,7 +74,7 @@ export function buildSearchAdReport(input: SearchAdReportInput): SearchAdReportO
     pushIfMissing(strengths, `전환 ${formatNumber(input.conversions, "건")}으로 운영 기준을 충족합니다.`);
   } else {
     pushIfMissing(issues, `전환 ${formatNumber(input.conversions, "건")}으로 전환량이 부족합니다.`);
-    pushIfMissing(nextActions, "전환이 적은 키워드와 랜딩 흐름을 함께 점검합니다.");
+    pushIfMissing(nextActions, "전환이 낮은 키워드와 랜딩 흐름을 함께 점검합니다.");
   }
 
   if ((input.cpa ?? 0) >= 60000) {
@@ -92,20 +88,11 @@ export function buildSearchAdReport(input: SearchAdReportInput): SearchAdReportO
     pushIfMissing(issues, `비교 메모: ${input.comparisonNotes.trim()}`);
   }
 
-  if (strengths.length === 0) {
-    strengths.push("지표가 많지 않지만 기본 흐름은 확인 가능합니다.");
-  }
+  if (strengths.length === 0) strengths.push("핵심 지표는 더 확인이 필요하지만 기본 흐름은 유지되고 있습니다.");
+  if (issues.length === 0) issues.push("즉시 수정이 필요한 큰 문제는 보이지 않습니다.");
+  if (nextActions.length === 0) nextActions.push("다음 보고 시점까지 같은 기준으로 수치를 다시 확인합니다.");
 
-  if (issues.length === 0) {
-    issues.push("즉시 수정이 필요한 큰 문제는 보이지 않습니다.");
-  }
-
-  if (nextActions.length === 0) {
-    nextActions.push("다음 보고 시점까지 같은 기준으로 수치를 다시 확인합니다.");
-  }
-
-  const audiencePrefix =
-    input.template === "client" ? "클라이언트 공유 기준으로" : "내부 공유 기준으로";
+  const audiencePrefix = input.template === "client" ? "클라이언트 공유 기준으로" : "내부 공유 기준으로";
 
   return {
     template: input.template,

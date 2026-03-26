@@ -1,4 +1,4 @@
-import { trimRecentRecords } from "@/lib/history/recent-records";
+﻿import { trimRecentRecords } from "@/lib/history/recent-records";
 import {
   getSavedFeatureMeta,
   type SaveItemInput,
@@ -11,6 +11,7 @@ import {
   readLocalStorageJson,
   writeLocalStorageJson,
 } from "@/lib/storage/local-storage";
+import { sanitizeDisplayText } from "@/lib/text/display-text";
 
 const STORAGE_KEY = "naver-auto.saved-items.v2";
 const LEGACY_STORAGE_KEY = "naver-auto.saved-items.v1";
@@ -30,8 +31,7 @@ function isValidDateString(value: unknown): value is string {
 }
 
 function normalizeText(value: string, fallback: string) {
-  const normalized = value.trim().replace(/\s+/g, " ");
-  return normalized || fallback;
+  return sanitizeDisplayText(value, fallback);
 }
 
 function sanitizeFields(value: unknown) {
