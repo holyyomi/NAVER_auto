@@ -33,6 +33,30 @@ function normalizeSource(inputType: SearchType, item: NaverSearchRawItem) {
   return "뉴스";
 }
 
+function buildShoppingDescription(item: NaverSearchRawItem) {
+  const summary = sanitizeText(item.description ?? "");
+  if (summary) {
+    return sanitizeDisplayText(summary);
+  }
+
+  const price = sanitizeText(item.lprice ?? "");
+  const mallName = sanitizeText(item.mallName ?? "");
+  const brand = sanitizeText(item.brand ?? "");
+  const maker = sanitizeText(item.maker ?? "");
+  const categories = [item.category1, item.category2, item.category3, item.category4]
+    .map((value) => sanitizeText(value ?? ""))
+    .filter(Boolean);
+
+  const segments = [
+    price ? `${price}원` : "",
+    mallName,
+    brand || maker,
+    categories.join(" > "),
+  ].filter(Boolean);
+
+  return sanitizeOptionalDisplayText(segments.join(" | "));
+}
+
 function normalizeSearchResponse(
   input: { keyword: string; searchType: SearchType },
   raw: NaverSearchRawResponse,
@@ -44,7 +68,10 @@ function normalizeSearchResponse(
     items: raw.items.map((item) => ({
       title: sanitizeDisplayText(sanitizeText(item.title)),
       link: item.link || item.originallink || "#",
-      description: sanitizeDisplayText(sanitizeText(item.description)),
+      description:
+        input.searchType === "shopping"
+          ? sanitizeDisplayText(buildShoppingDescription(item), "상품 정보가 없습니다.")
+          : sanitizeDisplayText(sanitizeText(item.description ?? "")),
       source: sanitizeOptionalDisplayText(normalizeSource(input.searchType, item)),
       type: input.searchType,
       publishedAt: input.searchType === "shopping" ? undefined : normalizePublishedDate(item.pubDate),

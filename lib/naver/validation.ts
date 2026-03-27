@@ -38,11 +38,22 @@ export type NaverTrendResponse = {
 export type NaverSearchRawItem = {
   title: string;
   link: string;
-  description: string;
+  description?: string;
   bloggername?: string;
   originallink?: string;
   pubDate?: string;
   mallName?: string;
+  image?: string;
+  lprice?: string;
+  hprice?: string;
+  productId?: string;
+  productType?: string;
+  brand?: string;
+  maker?: string;
+  category1?: string;
+  category2?: string;
+  category3?: string;
+  category4?: string;
 };
 
 export type NaverSearchRawResponse = {
@@ -275,17 +286,28 @@ function validateSearchItem(
   const record = asRecord(value);
   if (!record) {
     issues.push(`${path} must be an object.`);
-    return { title: "", link: "", description: "" };
+    return { title: "", link: "" };
   }
 
   return {
     title: asString(record.title, `${path}.title`, issues),
     link: asString(record.link, `${path}.link`, issues),
-    description: asString(record.description, `${path}.description`, issues),
+    description: asOptionalString(record.description, `${path}.description`, issues),
     bloggername: asOptionalString(record.bloggername, `${path}.bloggername`, issues),
     originallink: asOptionalString(record.originallink, `${path}.originallink`, issues),
     pubDate: asOptionalString(record.pubDate, `${path}.pubDate`, issues),
     mallName: asOptionalString(record.mallName, `${path}.mallName`, issues),
+    image: asOptionalString(record.image, `${path}.image`, issues),
+    lprice: asOptionalString(record.lprice, `${path}.lprice`, issues),
+    hprice: asOptionalString(record.hprice, `${path}.hprice`, issues),
+    productId: asOptionalString(record.productId, `${path}.productId`, issues),
+    productType: asOptionalString(record.productType, `${path}.productType`, issues),
+    brand: asOptionalString(record.brand, `${path}.brand`, issues),
+    maker: asOptionalString(record.maker, `${path}.maker`, issues),
+    category1: asOptionalString(record.category1, `${path}.category1`, issues),
+    category2: asOptionalString(record.category2, `${path}.category2`, issues),
+    category3: asOptionalString(record.category3, `${path}.category3`, issues),
+    category4: asOptionalString(record.category4, `${path}.category4`, issues),
   };
 }
 
